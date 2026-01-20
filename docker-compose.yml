@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llmwhiteboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: llmwhiteboard
+      POSTGRES_PASSWORD: llmwhiteboard
+      POSTGRES_DB: llmwhiteboard
+    ports:
+      - "22432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmwhiteboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend/LlmWhiteboard.Api
+      dockerfile: Dockerfile
+    container_name: llmwhiteboard-api
+    restart: unless-stopped
+    ports:
+      - "22001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=llmwhiteboard;Username=llmwhiteboard;Password=llmwhiteboard
+      Jwt__Key: ${JWT_KEY:-your-secret-key-at-least-32-characters-long-change-in-production}
+      Jwt__Issuer: LlmWhiteboard
+      Jwt__Audience: LlmWhiteboard
+      Jwt__ExpiryInDays: 7
+      Frontend__Url: http://localhost:22000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llmwhiteboard-web
+    restart: unless-stopped
+    ports:
+      - "22000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:22001
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

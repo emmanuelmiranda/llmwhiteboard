@@ -1,0 +1,65 @@
+# Docker Compose file for deploying LLM Whiteboard from GHCR
+#
+# Usage:
+#   1. Copy this file and .env.example to your target machine
+#   2. Rename .env.example to .env and configure it
+#   3. Login to GHCR: echo $GITHUB_PAT | docker login ghcr.io -u YOUR_USERNAME --password-stdin
+#   4. Run: docker-compose -f docker-compose.ghcr.yml up -d
+#
+# Update GITHUB_OWNER below to match your GitHub username/organization
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llmwhiteboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-llmwhiteboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-llmwhiteboard}
+      POSTGRES_DB: ${POSTGRES_DB:-llmwhiteboard}
+    ports:
+      - "${DB_PORT:-22432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-llmwhiteboard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    # UPDATE THIS: Replace 'your-github-username' with your GitHub username/org
+    image: ghcr.io/your-github-username/llmwhiteboard-backend:${VERSION:-latest}
+    container_name: llmwhiteboard-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-22001}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-llmwhiteboard};Username=${POSTGRES_USER:-llmwhiteboard};Password=${POSTGRES_PASSWORD:-llmwhiteboard}
+      Jwt__Key: ${JWT_KEY:?JWT_KEY is required}
+      Jwt__Issuer: LlmWhiteboard
+      Jwt__Audience: LlmWhiteboard
+      Jwt__ExpiryInDays: ${JWT_EXPIRY_DAYS:-7}
+      Frontend__Url: ${FRONTEND_URL:-http://localhost:22000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    # UPDATE THIS: Replace 'your-github-username' with your GitHub username/org
+    image: ghcr.io/your-github-username/llmwhiteboard-frontend:${VERSION:-latest}
+    container_name: llmwhiteboard-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-22000}:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:22001}
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
