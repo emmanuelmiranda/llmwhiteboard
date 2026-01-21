@@ -1,3 +1,5 @@
+import type { SessionStatus } from "@/types";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:22001";
 
 interface ApiError {
@@ -174,7 +176,7 @@ interface Session {
   projectPath: string;
   title: string | null;
   description: string | null;
-  status: string;
+  status: SessionStatus;
   tags: string[];
   machine: {
     id: string;

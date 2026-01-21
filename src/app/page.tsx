@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import {
   LayoutDashboard,
   Clock,
@@ -13,11 +16,22 @@ import {
   Check,
 } from "lucide-react";
 
-export default async function LandingPage() {
-  const session = await auth();
+export default function LandingPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
 
-  if (session?.user) {
-    redirect("/sessions");
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.push("/sessions");
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -207,7 +221,7 @@ export default async function LandingPage() {
               <span className="font-bold">LLM Whiteboard</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Open source. Built with Next.js, Prisma, and PostgreSQL.
+              Open source. Built with Next.js, ASP.NET Core, and PostgreSQL.
             </p>
             <div className="flex items-center space-x-4">
               <a
