@@ -93,3 +93,26 @@ public class SessionEventsResponse
     public int Limit { get; set; }
     public int Offset { get; set; }
 }
+
+public class SnapshotDto
+{
+    public string Id { get; set; } = null!;
+    public string SessionId { get; set; } = null!;
+    public int CompactionCycle { get; set; }
+    /// <summary>
+    /// Type: PostCompaction, Checkpoint, Delta
+    /// </summary>
+    public string Type { get; set; } = null!;
+    public int SizeBytes { get; set; }
+    /// <summary>
+    /// Approximate context percentage when snapshot was taken (0 for post-compaction, ~80 for checkpoint, 100 for delta)
+    /// </summary>
+    public int? ContextPercentage { get; set; }
+    public bool IsEncrypted { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class SnapshotListResponse
+{
+    public List<SnapshotDto> Snapshots { get; set; } = new();
+}

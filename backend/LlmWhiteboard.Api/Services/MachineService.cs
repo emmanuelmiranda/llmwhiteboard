@@ -29,6 +29,7 @@ public class MachineService : IMachineService
         {
             UserId = userId,
             MachineId = machineId,
+            Name = machineId, // Use machineId as display name by default
             LastSeenAt = DateTime.UtcNow
         };
 

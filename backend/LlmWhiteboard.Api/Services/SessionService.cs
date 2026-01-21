@@ -55,7 +55,7 @@ public class SessionService : ISessionService
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
     }
 
-    public async Task<(List<Session> Sessions, int Total)> ListSessionsAsync(string userId, SessionListQuery query)
+    public async Task<(List<Session> Sessions, int Total, Dictionary<string, int> EventCounts)> ListSessionsAsync(string userId, SessionListQuery query)
     {
         var baseQuery = _db.Sessions
             .Where(s => s.UserId == userId);
@@ -85,7 +85,7 @@ public class SessionService : ISessionService
             .Take(Math.Min(query.Limit, 100))
             .ToListAsync();
 
-        // Load event counts separately for efficiency
+        // Load event counts efficiently with a separate query
         var sessionIds = sessions.Select(s => s.Id).ToList();
         var eventCounts = await _db.SessionEvents
             .Where(e => sessionIds.Contains(e.SessionId))
@@ -93,7 +93,7 @@ public class SessionService : ISessionService
             .Select(g => new { SessionId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.SessionId, x => x.Count);
 
-        return (sessions, total);
+        return (sessions, total, eventCounts);
     }
 
     public async Task<Session> UpdateSessionAsync(string sessionId, string userId, SessionUpdateDto update)
@@ -241,5 +241,128 @@ public class SessionService : ISessionService
         session.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+    }
+
+    public async Task SavePeriodicSnapshotAsync(string sessionId, byte[] content, bool isEncrypted, string checksum)
+    {
+        var session = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+        if (session == null) return;
+
+        var snapshot = new TranscriptSnapshot
+        {
+            SessionId = sessionId,
+            CompactionCycle = session.CompactionCount,
+            Type = SnapshotType.Periodic,
+            Content = content,
+            IsEncrypted = isEncrypted,
+            Checksum = checksum,
+            SizeBytes = content.Length
+        };
+
+        _db.TranscriptSnapshots.Add(snapshot);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task ProcessCompactionAsync(string sessionId)
+    {
+        var session = await _db.Sessions
+            .Include(s => s.Transcript)
+            .FirstOrDefaultAsync(s => s.Id == sessionId);
+        if (session == null) return;
+
+        var previousCycle = session.CompactionCount - 1;
+        if (previousCycle < 0) return;
+
+        // Get all periodic snapshots from the previous compaction cycle
+        var periodicSnapshots = await _db.TranscriptSnapshots
+            .Where(s => s.SessionId == sessionId &&
+                        s.CompactionCycle == previousCycle &&
+                        s.Type == SnapshotType.Periodic)
+            .OrderBy(s => s.SizeBytes)
+            .ToListAsync();
+
+        if (periodicSnapshots.Count == 0) return;
+
+        // Find the largest snapshot (pre-compaction state)
+        var largestSnapshot = periodicSnapshots.Last();
+        var maxSize = largestSnapshot.SizeBytes;
+
+        // Find ~80% checkpoint (largest snapshot that's <= 80% of max size)
+        var targetSize = (int)(maxSize * 0.8);
+        var checkpointSnapshot = periodicSnapshots
+            .Where(s => s.SizeBytes <= targetSize)
+            .OrderByDescending(s => s.SizeBytes)
+            .FirstOrDefault();
+
+        // If no good 80% candidate, use the smallest one
+        checkpointSnapshot ??= periodicSnapshots.First();
+
+        // Create the 80% checkpoint snapshot
+        var checkpoint = new TranscriptSnapshot
+        {
+            SessionId = sessionId,
+            CompactionCycle = previousCycle,
+            Type = SnapshotType.Checkpoint,
+            Content = checkpointSnapshot.Content,
+            IsEncrypted = checkpointSnapshot.IsEncrypted,
+            Checksum = checkpointSnapshot.Checksum,
+            SizeBytes = checkpointSnapshot.SizeBytes,
+            ContextPercentage = maxSize > 0 ? (int)((checkpointSnapshot.SizeBytes * 100) / maxSize) : 0
+        };
+        _db.TranscriptSnapshots.Add(checkpoint);
+
+        // Create the delta (difference from checkpoint to pre-compaction)
+        // For now, store the full pre-compaction content with a marker
+        // In the future, we could compute an actual diff
+        if (largestSnapshot.Id != checkpointSnapshot.Id)
+        {
+            var delta = new TranscriptSnapshot
+            {
+                SessionId = sessionId,
+                CompactionCycle = previousCycle,
+                Type = SnapshotType.Delta,
+                Content = largestSnapshot.Content,
+                IsEncrypted = largestSnapshot.IsEncrypted,
+                Checksum = largestSnapshot.Checksum,
+                SizeBytes = largestSnapshot.SizeBytes,
+                ContextPercentage = 100
+            };
+            _db.TranscriptSnapshots.Add(delta);
+        }
+
+        // Create post-compaction snapshot from current transcript (if available)
+        if (session.Transcript != null)
+        {
+            var postCompaction = new TranscriptSnapshot
+            {
+                SessionId = sessionId,
+                CompactionCycle = session.CompactionCount, // Current cycle (post-compaction)
+                Type = SnapshotType.PostCompaction,
+                Content = session.Transcript.Content,
+                IsEncrypted = session.Transcript.IsEncrypted,
+                Checksum = session.Transcript.Checksum,
+                SizeBytes = session.Transcript.SizeBytes,
+                ContextPercentage = 0
+            };
+            _db.TranscriptSnapshots.Add(postCompaction);
+        }
+
+        // Delete all periodic snapshots from the previous cycle
+        _db.TranscriptSnapshots.RemoveRange(periodicSnapshots);
+
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task<List<TranscriptSnapshot>> GetSnapshotsAsync(string sessionId, string userId)
+    {
+        // Verify session belongs to user
+        var session = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        if (session == null) return new List<TranscriptSnapshot>();
+
+        return await _db.TranscriptSnapshots
+            .Where(s => s.SessionId == sessionId && s.Type != SnapshotType.Periodic)
+            .OrderBy(s => s.CompactionCycle)
+            .ThenBy(s => s.Type)
+            .ToListAsync();
     }
 }

@@ -7,7 +7,7 @@ public interface ISessionService
 {
     Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath);
     Task<Session?> GetSessionAsync(string sessionId, string userId);
-    Task<(List<Session> Sessions, int Total)> ListSessionsAsync(string userId, SessionListQuery query);
+    Task<(List<Session> Sessions, int Total, Dictionary<string, int> EventCounts)> ListSessionsAsync(string userId, SessionListQuery query);
     Task<Session> UpdateSessionAsync(string sessionId, string userId, SessionUpdateDto update);
     Task<bool> DeleteSessionAsync(string sessionId, string userId);
     Task<SessionEvent> AddEventAsync(string sessionId, string eventType, string? toolName, string? summary, object? metadata);
@@ -16,6 +16,11 @@ public interface ISessionService
     Task UpsertTranscriptAsync(string sessionId, byte[] content, bool isEncrypted, string checksum);
     Task<SessionTranscript?> GetTranscriptAsync(string sessionId, string userId);
     Task IncrementCompactionCountAsync(string sessionId, long? tokensUsed = null);
+
+    // Snapshot methods
+    Task SavePeriodicSnapshotAsync(string sessionId, byte[] content, bool isEncrypted, string checksum);
+    Task ProcessCompactionAsync(string sessionId);
+    Task<List<TranscriptSnapshot>> GetSnapshotsAsync(string sessionId, string userId);
 }
 
 public class SessionListQuery

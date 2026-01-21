@@ -38,7 +38,7 @@ public class SessionsController : ControllerBase
             statusEnum = parsed;
         }
 
-        var (sessions, total) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
+        var (sessions, total, eventCounts) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
         {
             Search = search,
             Status = statusEnum,
@@ -48,7 +48,7 @@ public class SessionsController : ControllerBase
 
         return Ok(new SessionListResponse
         {
-            Sessions = sessions.Select(MapToDto).ToList(),
+            Sessions = sessions.Select(s => MapToDto(s, eventCounts.GetValueOrDefault(s.Id, 0))).ToList(),
             Total = total,
             Limit = limit,
             Offset = offset
@@ -129,7 +129,33 @@ public class SessionsController : ControllerBase
         });
     }
 
-    private static SessionDto MapToDto(Session session)
+    /// <summary>
+    /// Get snapshots for a session (for time-travel resume)
+    /// </summary>
+    [HttpGet("{id}/snapshots")]
+    public async Task<ActionResult<SnapshotListResponse>> GetSessionSnapshots(string id)
+    {
+        var userId = GetUserId();
+
+        var snapshots = await _sessionService.GetSnapshotsAsync(id, userId);
+
+        return Ok(new SnapshotListResponse
+        {
+            Snapshots = snapshots.Select(s => new SnapshotDto
+            {
+                Id = s.Id,
+                SessionId = s.SessionId,
+                CompactionCycle = s.CompactionCycle,
+                Type = s.Type.ToString(),
+                SizeBytes = s.SizeBytes,
+                ContextPercentage = s.ContextPercentage,
+                IsEncrypted = s.IsEncrypted,
+                CreatedAt = s.CreatedAt
+            }).ToList()
+        });
+    }
+
+    private static SessionDto MapToDto(Session session, int? eventCount = null)
     {
         return new SessionDto
         {
@@ -148,7 +174,7 @@ public class SessionsController : ControllerBase
             } : null,
             HasTranscript = session.Transcript != null,
             IsEncrypted = session.Transcript?.IsEncrypted ?? false,
-            EventCount = session.Events.Count,
+            EventCount = eventCount ?? session.Events.Count,
             CompactionCount = session.CompactionCount,
             TotalTokensUsed = session.TotalTokensUsed,
             LastActivityAt = session.LastActivityAt,

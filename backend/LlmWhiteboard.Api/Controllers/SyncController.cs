@@ -81,6 +81,9 @@ public class SyncController : ControllerBase
                 else if (tokens is double d) tokensUsed = (long)d;
             }
             await _sessionService.IncrementCompactionCountAsync(session.Id, tokensUsed);
+
+            // Process compaction: create checkpoint & delta snapshots, cleanup periodic snapshots
+            await _sessionService.ProcessCompactionAsync(session.Id);
         }
 
         // Add event
@@ -126,8 +129,15 @@ public class SyncController : ControllerBase
             return BadRequest(new { error = "Checksum mismatch" });
         }
 
-        // Save transcript
+        // Save transcript (latest version)
         await _sessionService.UpsertTranscriptAsync(
+            session.Id,
+            content,
+            request.IsEncrypted,
+            request.Checksum);
+
+        // Also save as periodic snapshot for compaction history
+        await _sessionService.SavePeriodicSnapshotAsync(
             session.Id,
             content,
             request.IsEncrypted,
@@ -200,7 +210,7 @@ public class SyncController : ControllerBase
             statusEnum = parsed;
         }
 
-        var (sessions, total) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
+        var (sessions, total, eventCounts) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
         {
             Search = search,
             Status = statusEnum,
@@ -227,7 +237,7 @@ public class SyncController : ControllerBase
                 } : null,
                 HasTranscript = s.Transcript != null,
                 IsEncrypted = s.Transcript?.IsEncrypted ?? false,
-                EventCount = s.Events.Count,
+                EventCount = eventCounts.GetValueOrDefault(s.Id, 0),
                 CompactionCount = s.CompactionCount,
                 TotalTokensUsed = s.TotalTokensUsed,
                 LastActivityAt = s.LastActivityAt,

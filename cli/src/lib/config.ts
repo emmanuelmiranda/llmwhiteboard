@@ -23,6 +23,17 @@ export async function ensureConfigDir(): Promise<void> {
 }
 
 export async function getMachineId(): Promise<string> {
+  // First try to read from config (user-entered name takes priority)
+  try {
+    const config = await readConfig();
+    if (config?.machineId) {
+      return config.machineId;
+    }
+  } catch {
+    // Fall through to machine-id file
+  }
+
+  // Fall back to machine-id file (for backwards compatibility)
   try {
     const id = await fs.readFile(MACHINE_ID_FILE, "utf-8");
     return id.trim();

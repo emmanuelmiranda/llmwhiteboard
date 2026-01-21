@@ -5,6 +5,7 @@ import { createRequire } from "module";
 import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
 import { resumeCommand } from "./commands/resume.js";
+import { syncCommand } from "./commands/sync.js";
 import { statusCommand } from "./commands/status.js";
 import { logoutCommand } from "./commands/logout.js";
 import { rotateKeyCommand } from "./commands/rotate-key.js";
@@ -43,6 +44,13 @@ program
   .option("-s, --search <query>", "Search for a session by query")
   .option("--latest", "Resume the most recent session")
   .action(resumeCommand);
+
+program
+  .command("sync")
+  .description("Upload transcript for current session (useful for cross-machine resume)")
+  .option("-s, --session <id>", "Sync specific session ID")
+  .option("-a, --all", "Sync all sessions in current directory")
+  .action(syncCommand);
 
 program
   .command("status")

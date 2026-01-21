@@ -6,8 +6,45 @@
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { readConfig, getMachineId, readEncryptionKey } from "../lib/config.js";
+import { readConfig, getMachineId, readEncryptionKey, CONFIG_DIR } from "../lib/config.js";
 import { encrypt, computeChecksum } from "../lib/crypto.js";
+
+// Default sync interval in seconds (upload transcript at most this often on Stop events)
+const DEFAULT_SYNC_INTERVAL_SECONDS = 60;
+
+// File to track last upload times per session
+const LAST_SYNC_FILE = path.join(CONFIG_DIR, "last-sync.json");
+
+interface LastSyncData {
+  [sessionId: string]: number; // timestamp in ms
+}
+
+async function getLastSyncTime(sessionId: string): Promise<number> {
+  try {
+    const data = await fs.readFile(LAST_SYNC_FILE, "utf-8");
+    const syncData: LastSyncData = JSON.parse(data);
+    return syncData[sessionId] || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function setLastSyncTime(sessionId: string): Promise<void> {
+  let syncData: LastSyncData = {};
+  try {
+    const data = await fs.readFile(LAST_SYNC_FILE, "utf-8");
+    syncData = JSON.parse(data);
+  } catch {
+    // File doesn't exist yet
+  }
+  syncData[sessionId] = Date.now();
+  await fs.writeFile(LAST_SYNC_FILE, JSON.stringify(syncData));
+}
+
+function shouldUploadTranscript(lastSyncTime: number, intervalSeconds: number): boolean {
+  const elapsed = Date.now() - lastSyncTime;
+  return elapsed >= intervalSeconds * 1000;
+}
 
 interface HookContext {
   hook_event_name: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
@@ -77,11 +114,19 @@ async function uploadTranscript(
   config: { apiUrl: string; token: string; encryption?: { enabled: boolean } },
   context: HookContext,
   machineId: string
-) {
+): Promise<boolean> {
   try {
-    if (!context.transcript_path) return;
+    // Use provided transcript_path or calculate it
+    const transcriptPath = context.transcript_path || getTranscriptPath(context.cwd, context.session_id);
 
-    let content: Buffer = await fs.readFile(context.transcript_path);
+    let content: Buffer;
+    try {
+      content = await fs.readFile(transcriptPath);
+    } catch {
+      // Transcript file doesn't exist yet
+      return false;
+    }
+
     const rawContent = content.toString("utf-8");
     let isEncrypted = false;
 
@@ -116,9 +161,15 @@ async function uploadTranscript(
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({})) as { error?: string };
       console.error(`LLM Whiteboard transcript upload failed: ${errorBody.error || response.status}`);
+      return false;
     }
+
+    // Update last sync time on success
+    await setLastSyncTime(context.session_id);
+    return true;
   } catch (err) {
     console.error(`LLM Whiteboard transcript upload error: ${err instanceof Error ? err.message : err}`);
+    return false;
   }
 }
 
@@ -198,7 +249,17 @@ export async function hookCommand(): Promise<void> {
       console.error(`LLM Whiteboard sync failed: ${errorBody.error || response.status}`);
     }
 
-    if (context.hook_event_name === "SessionEnd" && context.transcript_path) {
+    // Upload transcript based on event type
+    const shouldUpload =
+      // Always upload on SessionEnd
+      context.hook_event_name === "SessionEnd" ||
+      // Always upload on PreCompact (before context gets summarized)
+      context.hook_event_name === "PreCompact" ||
+      // Upload on Stop if enough time has passed (throttled)
+      (context.hook_event_name === "Stop" &&
+        shouldUploadTranscript(await getLastSyncTime(context.session_id), DEFAULT_SYNC_INTERVAL_SECONDS));
+
+    if (shouldUpload) {
       await uploadTranscript(config, context, machineId);
     }
   } catch (err) {

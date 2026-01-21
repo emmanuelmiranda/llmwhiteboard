@@ -17,6 +17,16 @@ services:
       timeout: 5s
       retries: 5
 
+  flyway:
+    image: flyway/flyway:10
+    container_name: llmwhiteboard-flyway
+    command: -url=jdbc:postgresql://postgres:5432/llmwhiteboard -user=llmwhiteboard -password=llmwhiteboard -baselineOnMigrate=true migrate
+    volumes:
+      - ./db/migrations:/flyway/sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     build:
       context: ./backend/LlmWhiteboard.Api
@@ -37,6 +47,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
 
   frontend:
     build:

@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<SessionEvent> SessionEvents => Set<SessionEvent>();
     public DbSet<SessionTranscript> SessionTranscripts => Set<SessionTranscript>();
+    public DbSet<TranscriptSnapshot> TranscriptSnapshots => Set<TranscriptSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -95,6 +96,21 @@ public class AppDbContext : DbContext
                 .WithOne(s => s.Transcript)
                 .HasForeignKey<SessionTranscript>(e => e.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TranscriptSnapshot
+        modelBuilder.Entity<TranscriptSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.SessionId, e.CompactionCycle, e.Type });
+            entity.HasIndex(e => new { e.SessionId, e.CreatedAt });
+
+            entity.HasOne(e => e.Session)
+                .WithMany(s => s.Snapshots)
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Property(e => e.Type)
+                .HasConversion<string>();
         });
     }
 }
