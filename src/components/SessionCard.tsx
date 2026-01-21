@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime, truncate } from "@/lib/utils";
-import { Folder, Activity, Clock, Monitor, Lock, RefreshCw, Sparkles, Bot } from "lucide-react";
+import { Folder, Activity, Clock, Monitor, Lock, RefreshCw, Sparkles, Bot, FileText } from "lucide-react";
 import type { SessionStatus } from "@/types";
 
 interface SessionCardProps {
@@ -24,6 +24,7 @@ interface SessionCardProps {
     } | null;
     hasTranscript: boolean;
     isEncrypted: boolean;
+    transcriptSizeBytes: number;
     eventCount: number;
     compactionCount: number;
     totalTokensUsed: number;
@@ -38,6 +39,13 @@ const statusColors: Record<SessionStatus, string> = {
   Completed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   Archived: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
 };
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
   "claude-code": {
@@ -139,6 +147,12 @@ export function SessionCard({ session }: SessionCardProps) {
                 <Activity className="h-3 w-3 mr-1" />
                 {session.eventCount} events
               </span>
+              {session.transcriptSizeBytes > 0 && (
+                <span className="flex items-center">
+                  <FileText className="h-3 w-3 mr-1" />
+                  {formatBytes(session.transcriptSizeBytes)}
+                </span>
+              )}
               {session.machine && (
                 <span className="flex items-center">
                   <Monitor className="h-3 w-3 mr-1" />

@@ -18,6 +18,10 @@ public class SessionDto
     public MachineDto? Machine { get; set; }
     public bool HasTranscript { get; set; }
     public bool IsEncrypted { get; set; }
+    /// <summary>
+    /// Size of the transcript in bytes (0 if no transcript)
+    /// </summary>
+    public long TranscriptSizeBytes { get; set; }
     public int EventCount { get; set; }
     /// <summary>
     /// Number of times this session has been auto-compacted

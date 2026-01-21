@@ -214,6 +214,7 @@ interface Session {
   } | null;
   hasTranscript: boolean;
   isEncrypted: boolean;
+  transcriptSizeBytes: number;
   eventCount: number;
   compactionCount: number;
   totalTokensUsed: number;
