@@ -156,6 +156,35 @@ export async function resumeCommand(
 
     console.log(chalk.dim(`→ Target directory: ${targetDir}`));
 
+    // Check if file already exists
+    let fileExists = false;
+    try {
+      await fs.access(transcriptPath);
+      fileExists = true;
+    } catch {
+      // File doesn't exist, safe to write
+    }
+
+    if (fileExists) {
+      const stat = await fs.stat(transcriptPath);
+      console.log(chalk.yellow(`\n⚠ Local session already exists at: ${transcriptPath}`));
+      console.log(chalk.yellow(`  Size: ${(stat.size / 1024).toFixed(1)} KB, Modified: ${stat.mtime.toLocaleString()}`));
+
+      const { confirm } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "confirm",
+          message: "Overwrite local session with downloaded version?",
+          default: false,
+        },
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.dim("\nResume cancelled."));
+        return;
+      }
+    }
+
     // Create directory structure
     console.log(chalk.dim(`→ Creating directory structure...`));
     await fs.mkdir(targetDir, { recursive: true });

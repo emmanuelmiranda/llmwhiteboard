@@ -51,7 +51,7 @@ export default function HelpPage() {
       <div>
         <h1 className="text-3xl font-bold">Setup Guide</h1>
         <p className="text-muted-foreground mt-2">
-          Follow these instructions to sync your Claude Code sessions to LLM Whiteboard.
+          Follow these instructions to sync your Claude Code or Gemini CLI sessions to LLM Whiteboard.
         </p>
       </div>
 
@@ -71,6 +71,7 @@ export default function HelpPage() {
             <p className="font-medium">Prerequisites:</p>
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               <li>Node.js 18+ installed</li>
+              <li>Claude Code or Gemini CLI installed</li>
               <li>An API token from <a href="/settings/tokens" className="text-primary underline">Settings &gt; API Tokens</a></li>
             </ul>
           </div>
@@ -132,13 +133,22 @@ Options:
   -m, --machine-id <id>     Machine name (default: auto-generated)
   -u, --url <url>           API URL (default: https://api.llmwhiteboard.com)
   -p, --project             Install hooks for current project only
-  -e, --enable-encryption   Enable end-to-end encryption`}</CodeBlock>
+  -e, --enable-encryption   Enable end-to-end encryption
+  --cli <type>              CLI type: claude-code (default) or gemini-cli`}</CodeBlock>
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
             <p className="font-medium">Hook Installation:</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
               <li><strong>Default</strong>: Installs globally to <code className="bg-background px-1 rounded">~/.claude/settings.json</code> (works everywhere)</li>
               <li><strong>--project</strong>: Installs to <code className="bg-background px-1 rounded">.claude/settings.local.json</code> (current directory only)</li>
             </ul>
+          </div>
+
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+            <p className="font-medium">Gemini CLI Support:</p>
+            <p className="text-sm text-muted-foreground">
+              To use with Gemini CLI, add <code className="bg-background px-1 rounded">--cli gemini-cli</code> to your init command:
+            </p>
+            <CodeBlock copyable={false}>{`npx llmwhiteboard init --cli gemini-cli --token YOUR_TOKEN`}</CodeBlock>
           </div>
 
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
@@ -196,10 +206,14 @@ Options:
           </p>
           <CodeBlock>{`llmwhiteboard resume <session-id>`}</CodeBlock>
           <p className="text-sm text-muted-foreground">
-            This downloads the session transcript and places it in your local Claude data directory.
-            Then use Claude Code&apos;s continue feature:
+            This downloads the session transcript and places it in your local data directory.
+            Then use your CLI&apos;s continue feature:
           </p>
-          <CodeBlock>{`claude --continue <session-id>`}</CodeBlock>
+          <CodeBlock>{`# Claude Code
+claude --continue <session-id>
+
+# Gemini CLI
+gemini --continue <session-id>`}</CodeBlock>
           <div className="bg-muted/50 p-4 rounded-lg">
             <p className="text-sm font-medium">List Available Sessions</p>
             <CodeBlock>{`llmwhiteboard list`}</CodeBlock>
@@ -259,6 +273,7 @@ llmwhiteboard init`}</CodeBlock>
   "token": "lwb_sk_...",      // Required: Your API token
   "apiUrl": "https://api.llmwhiteboard.com",  // API endpoint
   "machineId": "My-MacBook",  // Unique identifier for this machine
+  "cliType": "claude-code",   // CLI type: claude-code or gemini-cli
   "encryption": {             // Optional: End-to-end encryption
     "enabled": true,
     "keyPath": "~/.llmwhiteboard/encryption.key"
@@ -267,10 +282,10 @@ llmwhiteboard init`}</CodeBlock>
           </div>
 
           <div className="space-y-2">
-            <p className="font-medium">Claude Code Hooks Location</p>
+            <p className="font-medium">Hooks Location</p>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>Global: <code className="bg-muted px-1 rounded">~/.claude/settings.json</code></li>
-              <li>Project-level: <code className="bg-muted px-1 rounded">.claude/settings.local.json</code> (in project root)</li>
+              <li><strong>Claude Code:</strong> <code className="bg-muted px-1 rounded">~/.claude/settings.json</code> or <code className="bg-muted px-1 rounded">.claude/settings.local.json</code></li>
+              <li><strong>Gemini CLI:</strong> <code className="bg-muted px-1 rounded">~/.gemini/settings.json</code> or <code className="bg-muted px-1 rounded">.gemini/settings.local.json</code></li>
             </ul>
           </div>
         </CardContent>

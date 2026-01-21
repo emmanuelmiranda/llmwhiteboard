@@ -182,6 +182,12 @@ class ApiClient {
     });
   }
 
+  async deleteMachine(id: string) {
+    return this.request<{ success: boolean }>(`/api/machines/${id}`, {
+      method: "DELETE",
+    });
+  }
+
   // Snapshots
   async getSessionSnapshots(sessionId: string) {
     return this.request<SnapshotListResponse>(

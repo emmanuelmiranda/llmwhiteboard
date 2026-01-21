@@ -61,6 +61,20 @@ public class MachinesController : ControllerBase
             SessionCount = machine.Sessions?.Count ?? 0
         });
     }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteMachine(string id)
+    {
+        var userId = GetUserId();
+        var deleted = await _machineService.DeleteMachineAsync(id, userId);
+
+        if (!deleted)
+        {
+            return BadRequest(new { error = "Cannot delete machine. It either doesn't exist or has sessions associated with it." });
+        }
+
+        return Ok(new { success = true });
+    }
 }
 
 public class MachineUpdateDto

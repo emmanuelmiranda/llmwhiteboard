@@ -34,6 +34,7 @@ async function getLastSyncTime(sessionId: string): Promise<number> {
   }
 }
 
+
 async function setLastSyncTime(sessionId: string): Promise<void> {
   let syncData: LastSyncData = {};
   try {
@@ -91,11 +92,27 @@ async function tryReadTranscriptTitle(transcriptPath: string): Promise<string | 
   }
 }
 
+function getWebUrl(apiUrl: string): string {
+  // Derive web URL from API URL
+  // e.g., https://api.llmwhiteboard.com -> https://llmwhiteboard.com
+  try {
+    const url = new URL(apiUrl);
+    if (url.hostname.startsWith("api.")) {
+      url.hostname = url.hostname.slice(4);
+    }
+    // Remove any path
+    url.pathname = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "https://llmwhiteboard.com";
+  }
+}
+
 async function uploadTranscript(
   config: { apiUrl: string; token: string; encryption?: { enabled: boolean } },
   context: NormalizedHookContext,
   machineId: string
-): Promise<boolean> {
+): Promise<{ success: boolean; sessionId?: string }> {
   try {
     const transcriptPath = context.transcriptPath;
 
@@ -104,7 +121,7 @@ async function uploadTranscript(
       content = await fs.readFile(transcriptPath);
     } catch {
       // Transcript file doesn't exist yet
-      return false;
+      return { success: false };
     }
 
     const rawContent = content.toString("utf-8");
@@ -142,15 +159,17 @@ async function uploadTranscript(
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({})) as { error?: string };
       console.error(`LLM Whiteboard transcript upload failed: ${errorBody.error || response.status}`);
-      return false;
+      return { success: false };
     }
+
+    const result = await response.json() as { sessionId?: string };
 
     // Update last sync time on success
     await setLastSyncTime(context.sessionId);
-    return true;
+    return { success: true, sessionId: result.sessionId };
   } catch (err) {
     console.error(`LLM Whiteboard transcript upload error: ${err instanceof Error ? err.message : err}`);
-    return false;
+    return { success: false };
   }
 }
 
@@ -246,9 +265,14 @@ export async function hookCommand(cliType: CliType = "claude-code"): Promise<voi
       body: JSON.stringify(payload),
     });
 
+    let syncSessionId: string | undefined;
+
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({})) as { error?: string };
       console.error(`LLM Whiteboard sync failed: ${errorBody.error || response.status}`);
+    } else {
+      const syncResult = await response.json() as { sessionId?: string };
+      syncSessionId = syncResult.sessionId;
     }
 
     // Upload transcript based on event type
@@ -263,6 +287,24 @@ export async function hookCommand(cliType: CliType = "claude-code"): Promise<voi
 
     if (shouldUpload) {
       await uploadTranscript(config, context, machineId);
+    }
+
+    // Output session URL notification
+    // showUrlOnStop: true = show on every response, false = disabled, undefined (default) = show on session start only
+    // Only works for Claude Code - Gemini CLI may not support systemMessage
+    const showOnEveryStop = config.showUrlOnStop === true;
+    const showOnStart = config.showUrlOnStop !== false; // default true, show on start
+    const shouldShowUrl =
+      (context.type === "session_start" && showOnStart) ||
+      (context.type === "agent_stop" && showOnEveryStop);
+
+    if (shouldShowUrl && syncSessionId && context.cliType === "claude-code") {
+      const webUrl = getWebUrl(config.apiUrl);
+      const url = `${webUrl}/sessions/${syncSessionId}`;
+      const output = JSON.stringify({
+        systemMessage: `Session backed up: ${url}`
+      });
+      process.stdout.write(output);
     }
   } catch (err) {
     console.error(`LLM Whiteboard hook error: ${err instanceof Error ? err.message : err}`);

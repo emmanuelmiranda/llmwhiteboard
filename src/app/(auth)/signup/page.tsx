@@ -87,11 +87,11 @@ export default function SignupPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
+                id="username"
+                type="text"
+                placeholder="your username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

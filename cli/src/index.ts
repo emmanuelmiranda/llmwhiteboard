@@ -31,6 +31,7 @@ program
   .option("-p, --project", "Install hooks for current project only (default: global)")
   .option("--hooks-only", "Just reinstall hooks without reconfiguring")
   .option("--cli <types>", "CLI tools to integrate (comma-separated: claude-code,gemini-cli)")
+  .option("--no-url-notify", "Disable session URL notification after each response")
   .action(initCommand);
 
 program

@@ -35,7 +35,7 @@ export default function LoginPage() {
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Invalid email or password",
+        description: error instanceof Error ? error.message : "Invalid username or password",
         variant: "destructive",
       });
     } finally {
@@ -49,17 +49,17 @@ export default function LoginPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
           <CardDescription>
-            Enter your email and password to access your sessions
+            Enter your username and password to access your sessions
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
+                id="username"
+                type="text"
+                placeholder="your username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

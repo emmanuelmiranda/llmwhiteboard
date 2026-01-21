@@ -323,16 +323,16 @@ export default function SessionDetailPage({
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" onClick={copyResumeCommand}>
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Resume Command
-          </Button>
           <Button
             variant="destructive"
             size="icon"
             onClick={handleDelete}
           >
             <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={copyResumeCommand}>
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Resume Command
           </Button>
         </div>
       </div>
@@ -766,12 +766,6 @@ export default function SessionDetailPage({
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Then start {cliConfig[session.cliType]?.label || session.cliType} with:{" "}
-                <code className="bg-muted px-1 rounded">
-                  {cliConfig[session.cliType]?.resumeCommand || "your CLI tool"}
-                </code>
-              </p>
             </CardContent>
           </Card>
 

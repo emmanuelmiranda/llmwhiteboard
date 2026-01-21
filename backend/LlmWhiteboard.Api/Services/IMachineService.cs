@@ -8,4 +8,5 @@ public interface IMachineService
     Task<List<Machine>> GetUserMachinesAsync(string userId);
     Task UpdateLastSeenAsync(string machineId);
     Task<Machine?> UpdateMachineNameAsync(string id, string userId, string? name);
+    Task<bool> DeleteMachineAsync(string id, string userId);
 }

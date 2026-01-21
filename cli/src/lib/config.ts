@@ -11,6 +11,8 @@ export interface Config {
     enabled: boolean;
     keyPath: string;
   };
+  /** Show session URL: true = every response, false = never, undefined = session start only (default) */
+  showUrlOnStop?: boolean;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".llmwhiteboard");

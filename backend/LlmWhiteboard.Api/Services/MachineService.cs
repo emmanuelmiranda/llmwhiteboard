@@ -71,4 +71,23 @@ public class MachineService : IMachineService
 
         return machine;
     }
+
+    public async Task<bool> DeleteMachineAsync(string id, string userId)
+    {
+        var machine = await _db.Machines
+            .Include(m => m.Sessions)
+            .FirstOrDefaultAsync(m => m.Id == id && m.UserId == userId);
+
+        if (machine == null)
+            return false;
+
+        // Only allow deletion if no sessions are associated
+        if (machine.Sessions.Count > 0)
+            return false;
+
+        _db.Machines.Remove(machine);
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
 }

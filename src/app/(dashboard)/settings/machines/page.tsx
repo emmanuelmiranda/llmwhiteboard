@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Monitor, Pencil, Check, X } from "lucide-react";
+import { Monitor, Pencil, Check, X, Trash2 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { apiClient, type Machine } from "@/lib/api-client";
 
@@ -61,6 +61,20 @@ export default function MachinesPage() {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteMachine = async (id: string) => {
+    try {
+      await apiClient.deleteMachine(id);
+      setMachines(machines.filter(m => m.id !== id));
+      toast({ title: "Deleted", description: "Machine removed" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete machine",
         variant: "destructive",
       });
     }
@@ -142,6 +156,17 @@ export default function MachinesPage() {
                       </div>
                     </div>
                   </div>
+                  {machine.sessionCount === 0 && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => deleteMachine(machine.id)}
+                      title="Delete machine"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

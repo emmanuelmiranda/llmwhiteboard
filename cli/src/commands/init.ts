@@ -25,6 +25,7 @@ interface InitOptions {
   project?: boolean;  // Use project-level hooks instead of global
   hooksOnly?: boolean;  // Just reinstall hooks, skip config
   cli?: string;  // Comma-separated list of CLI types
+  noUrlNotify?: boolean;  // Disable URL notification after each response
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
@@ -208,6 +209,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
       apiUrl,
       machineId: machineId!,
       encryption: encryptionConfig,
+      showUrlOnStop: !options.noUrlNotify,  // default true unless --no-url-notify
     });
 
     // Install hooks for selected CLIs
