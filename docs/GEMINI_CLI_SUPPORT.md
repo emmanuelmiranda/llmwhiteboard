@@ -1,10 +1,14 @@
 # Gemini CLI Support
 
-This document outlines what work is needed to add Gemini CLI support to LLM Whiteboard, including comprehensive support for all lifecycle hooks in both Claude Code and Gemini CLI.
+This document describes the Gemini CLI integration in LLM Whiteboard, including comprehensive support for all lifecycle hooks in both Claude Code and Gemini CLI.
+
+## Status: Implemented
+
+The CLI now supports both Claude Code and Gemini CLI through an adapter-based architecture. Users can integrate with either or both tools during setup.
 
 ## Overview
 
-**Good news:** Gemini CLI has a hooks system that is very similar to Claude Code's, making integration feasible with moderate effort. Both use shell commands triggered at lifecycle events, receiving JSON context via stdin.
+Gemini CLI has a hooks system that is very similar to Claude Code's, making the integration straightforward. Both use shell commands triggered at lifecycle events, receiving JSON context via stdin.
 
 ## Complete Hook Events Comparison
 
@@ -224,566 +228,124 @@ This document outlines what work is needed to add Gemini CLI support to LLM Whit
 | **Resume Command** | `claude --continue <id>` | `gemini --resume <id>` |
 | **List Sessions** | N/A | `gemini --list-sessions` |
 
-## Implementation Plan
+## Implementation
 
-### Phase 1: Normalized Event Types
+The implementation uses an adapter pattern to support multiple CLI tools. Key files:
 
-Create a unified event type system that maps both CLI hooks to a common format.
+| File | Description |
+|------|-------------|
+| `cli/src/lib/cli-adapter.ts` | Adapter interface and types |
+| `cli/src/lib/adapters/claude-code.ts` | Claude Code adapter |
+| `cli/src/lib/adapters/gemini-cli.ts` | Gemini CLI adapter |
+| `cli/src/lib/adapters/index.ts` | Adapter factory |
+| `cli/src/lib/hooks.ts` | Hook installation using adapters |
+| `cli/src/commands/hook.ts` | Hook command with `--cli` flag |
 
-**New file: `cli/src/lib/events.ts`**
-```typescript
-export type NormalizedEventType =
-  | 'session_start'
-  | 'session_end'
-  | 'user_prompt'
-  | 'tool_use'
-  | 'tool_use_start'      // PreToolUse/BeforeTool
-  | 'agent_stop'
-  | 'subagent_stop'
-  | 'context_compaction'
-  | 'permission_request'
-  | 'notification'
-  | 'model_request'       // Gemini only
-  | 'model_response';     // Gemini only
+### Architecture
 
-export interface NormalizedEvent {
-  type: NormalizedEventType;
-  sessionId: string;
-  transcriptPath: string;
-  cwd: string;
-  timestamp: string;
-
-  // Tool events
-  toolName?: string;
-  toolInput?: Record<string, unknown>;
-  toolResponse?: unknown;
-
-  // Prompt events
-  prompt?: string;
-  promptResponse?: string;
-
-  // Session events
-  sessionReason?: string;  // Why session started/ended
-
-  // Compaction events
-  compactionTrigger?: 'manual' | 'auto';
-
-  // Notification events
-  notificationType?: string;
-  message?: string;
-
-  // Raw data for debugging
-  rawEvent: Record<string, unknown>;
-  cliType: 'claude-code' | 'gemini-cli';
-}
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        CLI Commands                          │
+│   init, hook, resume, status, logout                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        hooks.ts                              │
+│   installHooksForCli(), uninstallHooksForCli(),             │
+│   detectInstalledClis(), getHooksStatus()                   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     CLI Adapter Interface                    │
+│   isInstalled(), getSettingsPath(), getTranscriptPath(),    │
+│   getHookConfig(), parseHookContext(), getResumeCommand()   │
+└─────────────────────────────────────────────────────────────┘
+              │                               │
+              ▼                               ▼
+┌─────────────────────────┐   ┌─────────────────────────┐
+│   ClaudeCodeAdapter     │   │   GeminiCliAdapter      │
+│   ~/.claude/            │   │   ~/.gemini/            │
+│   settings.json         │   │   settings.json         │
+└─────────────────────────┘   └─────────────────────────┘
 ```
 
-### Phase 2: CLI Adapter Interface
+### Key Features
 
-**New file: `cli/src/lib/cli-adapter.ts`**
-```typescript
-export interface CliAdapter {
-  name: 'claude-code' | 'gemini-cli';
-  displayName: string;
+1. **Auto-detection**: The `init` command automatically detects which CLI tools are installed
+2. **Multi-CLI support**: Users can integrate with both Claude Code and Gemini CLI simultaneously
+3. **Normalized events**: Both CLIs' hook events are normalized to a common format
+4. **CLI-specific resume**: The `resume` command restores transcripts to the correct location for each CLI
+5. **Experimental flag handling**: Gemini CLI's experimental hooks are automatically enabled
 
-  // Detection
-  isInstalled(): Promise<boolean>;
-  getVersion(): Promise<string | null>;
+### Default Hooks by CLI
 
-  // Paths
-  getSettingsPath(scope: 'user' | 'project'): string;
-  getTranscriptPath(projectPath: string, sessionId: string): string;
+**Claude Code (6 hooks):**
+- SessionStart, SessionEnd, UserPromptSubmit, PostToolUse, Stop, PreCompact
 
-  // Hook configuration
-  getHookConfig(hookCommand: string): HookConfiguration;
-  getSupportedHooks(): string[];
+**Gemini CLI (6 hooks):**
+- SessionStart, SessionEnd, BeforeAgent, AfterAgent, AfterTool, PreCompress
 
-  // Resume
-  getResumeCommand(sessionId: string, projectPath?: string): string;
-  getListSessionsCommand(): string | null;
+### Usage
 
-  // Parse hook stdin
-  parseHookContext(stdin: string): NormalizedEvent;
-}
+```bash
+# Initialize with auto-detection
+npx llmwhiteboard init
 
-export interface HookConfiguration {
-  // The full settings object to merge into settings.json
-  settings: Record<string, unknown>;
-  // Hooks that need experimental flags enabled
-  experimentalFlags?: string[];
-}
+# Initialize for specific CLI only
+npx llmwhiteboard init --cli gemini-cli
+
+# Reinstall hooks for all detected CLIs
+npx llmwhiteboard init --hooks-only
+
+# Check status
+npx llmwhiteboard status
 ```
 
-### Phase 3: Claude Code Adapter
+## Files Changed
 
-**New file: `cli/src/lib/adapters/claude-code.ts`**
-```typescript
-import { CliAdapter, HookConfiguration, NormalizedEvent, NormalizedEventType } from '../cli-adapter';
-import os from 'os';
-import path from 'path';
-
-export class ClaudeCodeAdapter implements CliAdapter {
-  name = 'claude-code' as const;
-  displayName = 'Claude Code';
-
-  async isInstalled(): Promise<boolean> {
-    return fs.existsSync(path.join(os.homedir(), '.claude'));
-  }
-
-  getSettingsPath(scope: 'user' | 'project'): string {
-    if (scope === 'user') {
-      return path.join(os.homedir(), '.claude', 'settings.json');
-    }
-    return path.join(process.cwd(), '.claude', 'settings.local.json');
-  }
-
-  getTranscriptPath(projectPath: string, sessionId: string): string {
-    const sanitized = sanitizePath(projectPath);
-    return path.join(os.homedir(), '.claude', 'projects', sanitized, `${sessionId}.jsonl`);
-  }
-
-  getSupportedHooks(): string[] {
-    return [
-      'SessionStart',
-      'SessionEnd',
-      'UserPromptSubmit',
-      'PreToolUse',
-      'PostToolUse',
-      'PermissionRequest',
-      'Stop',
-      'SubagentStop',
-      'PreCompact',
-      'Notification'
-    ];
-  }
-
-  getHookConfig(hookCommand: string): HookConfiguration {
-    const hookEntry = {
-      type: 'command',
-      command: hookCommand
-    };
-
-    return {
-      settings: {
-        hooks: {
-          SessionStart: [{ hooks: [hookEntry] }],
-          SessionEnd: [{ hooks: [hookEntry] }],
-          UserPromptSubmit: [{ hooks: [hookEntry] }],
-          PostToolUse: [{ hooks: [hookEntry] }],
-          Stop: [{ hooks: [hookEntry] }],
-          SubagentStop: [{ hooks: [hookEntry] }],
-          PreCompact: [{ hooks: [hookEntry] }],
-          // Optional hooks (can be enabled by user)
-          // PreToolUse: [{ hooks: [hookEntry] }],
-          // PermissionRequest: [{ hooks: [hookEntry] }],
-          // Notification: [{ hooks: [hookEntry] }],
-        }
-      }
-    };
-  }
-
-  getResumeCommand(sessionId: string, projectPath?: string): string {
-    if (projectPath) {
-      return `claude --continue ${sessionId} --directory "${projectPath}"`;
-    }
-    return `claude --continue ${sessionId}`;
-  }
-
-  getListSessionsCommand(): string | null {
-    return null; // Claude Code doesn't have a list sessions command
-  }
-
-  parseHookContext(stdin: string): NormalizedEvent {
-    const raw = JSON.parse(stdin);
-    const eventType = this.mapEventType(raw.hook_event_name);
-
-    return {
-      type: eventType,
-      sessionId: raw.session_id,
-      transcriptPath: raw.transcript_path,
-      cwd: raw.cwd || process.cwd(),
-      timestamp: new Date().toISOString(),
-      toolName: raw.tool_name,
-      toolInput: raw.tool_input,
-      toolResponse: raw.tool_response,
-      prompt: raw.prompt,
-      sessionReason: raw.reason || raw.source,
-      compactionTrigger: raw.trigger,
-      notificationType: raw.notification_type,
-      message: raw.message,
-      rawEvent: raw,
-      cliType: 'claude-code'
-    };
-  }
-
-  private mapEventType(hookName: string): NormalizedEventType {
-    const mapping: Record<string, NormalizedEventType> = {
-      'SessionStart': 'session_start',
-      'SessionEnd': 'session_end',
-      'UserPromptSubmit': 'user_prompt',
-      'PreToolUse': 'tool_use_start',
-      'PostToolUse': 'tool_use',
-      'PermissionRequest': 'permission_request',
-      'Stop': 'agent_stop',
-      'SubagentStop': 'subagent_stop',
-      'PreCompact': 'context_compaction',
-      'Notification': 'notification'
-    };
-    return mapping[hookName] || 'notification';
-  }
-}
-```
-
-### Phase 4: Gemini CLI Adapter
-
-**New file: `cli/src/lib/adapters/gemini-cli.ts`**
-```typescript
-import { CliAdapter, HookConfiguration, NormalizedEvent, NormalizedEventType } from '../cli-adapter';
-import os from 'os';
-import path from 'path';
-
-export class GeminiCliAdapter implements CliAdapter {
-  name = 'gemini-cli' as const;
-  displayName = 'Gemini CLI';
-
-  async isInstalled(): Promise<boolean> {
-    return fs.existsSync(path.join(os.homedir(), '.gemini'));
-  }
-
-  getSettingsPath(scope: 'user' | 'project'): string {
-    if (scope === 'user') {
-      return path.join(os.homedir(), '.gemini', 'settings.json');
-    }
-    return path.join(process.cwd(), '.gemini', 'settings.json');
-  }
-
-  getTranscriptPath(projectPath: string, sessionId: string): string {
-    const hash = hashProjectPath(projectPath);
-    return path.join(os.homedir(), '.gemini', 'tmp', hash, 'chats', `${sessionId}.json`);
-  }
-
-  getSupportedHooks(): string[] {
-    return [
-      'SessionStart',
-      'SessionEnd',
-      'BeforeAgent',
-      'AfterAgent',
-      'BeforeTool',
-      'AfterTool',
-      'BeforeModel',
-      'AfterModel',
-      'BeforeToolSelection',
-      'Notification',
-      'PreCompress'
-    ];
-  }
-
-  getHookConfig(hookCommand: string): HookConfiguration {
-    const hookEntry = {
-      type: 'command',
-      command: hookCommand
-    };
-
-    return {
-      settings: {
-        // Required experimental flags for Gemini CLI hooks
-        hooks: {
-          enabled: true
-        },
-        tools: {
-          enableHooks: true
-        },
-        // Hook definitions
-        hooks: {
-          SessionStart: [{ hooks: [hookEntry] }],
-          SessionEnd: [{ hooks: [hookEntry] }],
-          BeforeAgent: [{ hooks: [hookEntry] }],
-          AfterAgent: [{ hooks: [hookEntry] }],
-          AfterTool: [{ hooks: [hookEntry] }],
-          PreCompress: [{ hooks: [hookEntry] }],
-          // Optional hooks
-          // BeforeTool: [{ hooks: [hookEntry] }],
-          // AfterModel: [{ hooks: [hookEntry] }],
-          // Notification: [{ hooks: [hookEntry] }],
-        }
-      },
-      experimentalFlags: ['hooks.enabled', 'tools.enableHooks']
-    };
-  }
-
-  getResumeCommand(sessionId: string, projectPath?: string): string {
-    return `gemini --resume ${sessionId}`;
-  }
-
-  getListSessionsCommand(): string {
-    return 'gemini --list-sessions';
-  }
-
-  parseHookContext(stdin: string): NormalizedEvent {
-    const raw = JSON.parse(stdin);
-    const eventType = this.mapEventType(raw.hook_event_name);
-
-    return {
-      type: eventType,
-      sessionId: raw.session_id,
-      transcriptPath: raw.transcript_path,
-      cwd: raw.cwd || process.cwd(),
-      timestamp: raw.timestamp || new Date().toISOString(),
-      toolName: raw.tool_name,
-      toolInput: raw.tool_input,
-      toolResponse: raw.tool_response,
-      prompt: raw.prompt,
-      promptResponse: raw.prompt_response,
-      sessionReason: raw.reason,
-      compactionTrigger: raw.trigger,
-      notificationType: raw.notification_type,
-      message: raw.message,
-      rawEvent: raw,
-      cliType: 'gemini-cli'
-    };
-  }
-
-  private mapEventType(hookName: string): NormalizedEventType {
-    const mapping: Record<string, NormalizedEventType> = {
-      'SessionStart': 'session_start',
-      'SessionEnd': 'session_end',
-      'BeforeAgent': 'user_prompt',
-      'AfterAgent': 'agent_stop',
-      'BeforeTool': 'tool_use_start',
-      'AfterTool': 'tool_use',
-      'BeforeModel': 'model_request',
-      'AfterModel': 'model_response',
-      'PreCompress': 'context_compaction',
-      'Notification': 'notification'
-    };
-    return mapping[hookName] || 'notification';
-  }
-}
-```
-
-### Phase 5: Update Hook Command
-
-**Modify: `cli/src/commands/hook.ts`**
-
-```typescript
-import { getAdapter } from '../lib/adapters';
-
-export const hookCommand = new Command('hook')
-  .description('Process hook events from LLM CLIs')
-  .option('--cli <type>', 'CLI type (claude-code or gemini-cli)', 'claude-code')
-  .action(async (options) => {
-    const stdinData = await readStdin();
-    const adapter = getAdapter(options.cli);
-
-    // Parse using the appropriate adapter
-    const event = adapter.parseHookContext(stdinData);
-
-    // Build sync payload
-    const payload = {
-      localSessionId: event.sessionId,
-      projectPath: event.cwd,
-      machineId: config.machineId,
-      cliType: adapter.name,
-      suggestedTitle: await extractTitle(event),
-      event: {
-        type: event.type,
-        toolName: event.toolName,
-        summary: buildSummary(event),
-        metadata: {
-          toolInput: event.toolInput,
-          toolResponse: event.toolResponse,
-          prompt: event.prompt,
-          trigger: event.compactionTrigger,
-          reason: event.sessionReason
-        }
-      },
-      timestamp: event.timestamp
-    };
-
-    // Send to API
-    await syncEvent(payload);
-
-    // Upload transcript on session end
-    if (event.type === 'session_end') {
-      await uploadTranscript(event.sessionId, event.transcriptPath);
-    }
-  });
-```
-
-### Phase 6: Update Init Command
-
-**Modify: `cli/src/commands/init.ts`**
-
-```typescript
-import { detectInstalledClis, getAdapter } from '../lib/adapters';
-
-// In the init flow:
-const installedClis = await detectInstalledClis();
-
-if (installedClis.length === 0) {
-  console.log(chalk.yellow('No supported CLI tools detected.'));
-  console.log('Please install one of the following:');
-  console.log('  - Claude Code: https://claude.com/code');
-  console.log('  - Gemini CLI: https://github.com/google-gemini/gemini-cli');
-  return;
-}
-
-let selectedClis = installedClis;
-if (installedClis.length > 1) {
-  const { clis } = await inquirer.prompt([{
-    type: 'checkbox',
-    name: 'clis',
-    message: 'Which CLI tools do you want to integrate?',
-    choices: installedClis.map(cli => {
-      const adapter = getAdapter(cli);
-      return {
-        name: adapter.displayName,
-        value: cli,
-        checked: true
-      };
-    })
-  }]);
-  selectedClis = clis;
-}
-
-// Install hooks for each selected CLI
-for (const cliType of selectedClis) {
-  const adapter = getAdapter(cliType);
-  const hookCommand = `npx llmwhiteboard hook --cli ${cliType}`;
-
-  console.log(chalk.blue(`Installing hooks for ${adapter.displayName}...`));
-
-  // Check for experimental flags (Gemini)
-  const hookConfig = adapter.getHookConfig(hookCommand);
-  if (hookConfig.experimentalFlags?.length) {
-    console.log(chalk.yellow(`Note: ${adapter.displayName} hooks are experimental.`));
-    console.log(chalk.yellow(`Enabling: ${hookConfig.experimentalFlags.join(', ')}`));
-  }
-
-  await installHooks(adapter, scope, hookConfig);
-  console.log(chalk.green(`✓ ${adapter.displayName} hooks installed`));
-}
-
-// Update config
-await saveConfig({
-  ...config,
-  integrations: {
-    'claude-code': {
-      enabled: selectedClis.includes('claude-code'),
-      hooksInstalled: selectedClis.includes('claude-code')
-    },
-    'gemini-cli': {
-      enabled: selectedClis.includes('gemini-cli'),
-      hooksInstalled: selectedClis.includes('gemini-cli')
-    }
-  }
-});
-```
-
-### Phase 7: Update Resume Command
-
-**Modify: `cli/src/commands/resume.ts`**
-
-```typescript
-// After downloading session from API:
-const session = await fetchSession(sessionId);
-const adapter = getAdapter(session.cliType);
-
-// Restore transcript to CLI-specific location
-const transcriptPath = adapter.getTranscriptPath(session.projectPath, session.localSessionId);
-await ensureDir(path.dirname(transcriptPath));
-await writeFile(transcriptPath, decryptedContent);
-
-// Show resume command
-console.log(chalk.green('✓ Session restored'));
-console.log();
-console.log('Resume with:');
-console.log(chalk.cyan(`  ${adapter.getResumeCommand(session.localSessionId, session.projectPath)}`));
-```
-
-### Phase 8: Backend Changes
-
-**Modify: `backend/LlmWhiteboard.Api/Models/Session.cs`**
-```csharp
-public class Session
-{
-    // ... existing fields ...
-
-    /// <summary>
-    /// The CLI tool that created this session (claude-code, gemini-cli)
-    /// </summary>
-    public string CliType { get; set; } = "claude-code";
-}
-```
-
-**Modify: `backend/LlmWhiteboard.Api/DTOs/SyncRequest.cs`**
-```csharp
-public class SyncRequest
-{
-    // ... existing fields ...
-
-    public string? CliType { get; set; }
-}
-```
-
-**Modify: `backend/LlmWhiteboard.Api/Controllers/SyncController.cs`**
-```csharp
-// In the sync endpoint:
-session.CliType = request.CliType ?? "claude-code";
-```
-
-### Phase 9: Frontend Changes
-
-**Session card badge:**
-```tsx
-// components/SessionCard.tsx
-<Badge variant={session.cliType === 'claude-code' ? 'default' : 'secondary'}>
-  {session.cliType === 'claude-code' ? 'Claude' : 'Gemini'}
-</Badge>
-```
-
-**Filter dropdown:**
-```tsx
-// components/SessionFilters.tsx
-<Select value={cliFilter} onValueChange={setCliFilter}>
-  <SelectItem value="all">All CLIs</SelectItem>
-  <SelectItem value="claude-code">Claude Code</SelectItem>
-  <SelectItem value="gemini-cli">Gemini CLI</SelectItem>
-</Select>
-```
-
-## File Changes Summary
+### CLI (Implemented)
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `cli/src/lib/events.ts` | New | Normalized event types |
-| `cli/src/lib/cli-adapter.ts` | New | Adapter interface |
-| `cli/src/lib/adapters/index.ts` | New | Adapter factory |
+| `cli/src/lib/cli-adapter.ts` | New | Adapter interface and types |
+| `cli/src/lib/adapters/index.ts` | New | Adapter factory and detection |
 | `cli/src/lib/adapters/claude-code.ts` | New | Claude Code adapter |
 | `cli/src/lib/adapters/gemini-cli.ts` | New | Gemini CLI adapter |
-| `cli/src/lib/hooks.ts` | Modify | Use adapters for hook installation |
-| `cli/src/lib/config.ts` | Modify | Add integrations to config schema |
-| `cli/src/commands/init.ts` | Modify | Multi-CLI detection and selection |
-| `cli/src/commands/hook.ts` | Modify | Add `--cli` flag, use adapters |
-| `cli/src/commands/resume.ts` | Modify | CLI-specific restore paths and commands |
-| `cli/src/commands/logout.ts` | Modify | Remove hooks from all integrated CLIs |
-| `cli/src/commands/status.ts` | Modify | Show which CLIs are integrated |
+| `cli/src/lib/hooks.ts` | Modified | Use adapters, multi-CLI support |
+| `cli/src/lib/api.ts` | Modified | Added cliType to Session and Transcript types |
+| `cli/src/commands/init.ts` | Modified | Multi-CLI detection and selection |
+| `cli/src/commands/hook.ts` | Modified | Add `--cli` flag, use adapters |
+| `cli/src/commands/resume.ts` | Modified | CLI-specific restore paths and commands |
+| `cli/src/commands/logout.ts` | Modified | Remove hooks from all integrated CLIs |
+| `cli/src/commands/status.ts` | Modified | Show status for all CLIs |
+| `cli/src/index.ts` | Modified | Updated descriptions and hook command |
+
+### Backend (TODO)
+
+| File | Change Type | Description |
+|------|-------------|-------------|
 | `backend/.../Models/Session.cs` | Modify | Add CliType field |
 | `backend/.../DTOs/SyncRequest.cs` | Modify | Add CliType to payload |
 | `backend/.../Controllers/SyncController.cs` | Modify | Store CliType |
+
+### Frontend (TODO)
+
+| File | Change Type | Description |
+|------|-------------|-------------|
 | `frontend/.../SessionCard.tsx` | Modify | Show CLI type badge |
 | `frontend/.../SessionFilters.tsx` | Modify | Add CLI type filter |
 
 ## Hooks Enabled by Default
 
-### Claude Code (7 hooks)
+### Claude Code (6 hooks)
 1. **SessionStart** - Track session begins
 2. **SessionEnd** - Track session ends + upload transcript
 3. **UserPromptSubmit** - Track user prompts
-4. **PostToolUse** - Track tool usage
+4. **PostToolUse** - Track tool usage (with matcher `*`)
 5. **Stop** - Track agent completions
-6. **SubagentStop** - Track subagent completions
-7. **PreCompact** - Track context compaction
+6. **PreCompact** - Track context compaction
 
 ### Gemini CLI (6 hooks)
 1. **SessionStart** - Track session begins
@@ -793,7 +355,8 @@ session.CliType = request.CliType ?? "claude-code";
 5. **AfterTool** - Track tool usage
 6. **PreCompress** - Track context compression
 
-### Optional Hooks (user-enabled)
+### Optional Hooks (can be enabled manually)
+- **SubagentStop** (Claude only) - Track subagent completions
 - **PreToolUse** / **BeforeTool** - Track tool invocations before execution
 - **PermissionRequest** (Claude only) - Track permission dialogs
 - **Notification** - Track system notifications

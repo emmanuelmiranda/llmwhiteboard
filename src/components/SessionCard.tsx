@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime, truncate } from "@/lib/utils";
-import { Folder, Activity, Clock, Monitor, Lock, RefreshCw } from "lucide-react";
+import { Folder, Activity, Clock, Monitor, Lock, RefreshCw, Sparkles, Bot } from "lucide-react";
 import type { SessionStatus } from "@/types";
 
 interface SessionCardProps {
@@ -16,6 +16,7 @@ interface SessionCardProps {
     description: string | null;
     status: SessionStatus;
     tags: string[];
+    cliType: string;
     machine: {
       id: string;
       machineId: string;
@@ -31,22 +32,34 @@ interface SessionCardProps {
   };
 }
 
-const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "secondary"> = {
-  ACTIVE: "success",
-  PAUSED: "warning",
-  COMPLETED: "default",
-  ARCHIVED: "secondary",
+const statusColors: Record<SessionStatus, string> = {
+  Active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  Paused: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  Completed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  Archived: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
 };
 
-const statusLabels: Record<SessionStatus, string> = {
-  ACTIVE: "Active",
-  PAUSED: "Paused",
-  COMPLETED: "Completed",
-  ARCHIVED: "Archived",
+const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
+  "claude-code": {
+    label: "Claude",
+    icon: Sparkles,
+    className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  },
+  "gemini-cli": {
+    label: "Gemini",
+    icon: Bot,
+    className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  },
 };
 
 export function SessionCard({ session }: SessionCardProps) {
   const projectName = session.projectPath.split(/[/\\]/).pop() || session.projectPath;
+  const cliInfo = cliConfig[session.cliType] || {
+    label: session.cliType,
+    icon: Bot,
+    className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  };
+  const CliIcon = cliInfo.icon;
 
   return (
     <Link href={`/sessions/${session.id}`}>
@@ -63,6 +76,13 @@ export function SessionCard({ session }: SessionCardProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${cliInfo.className}`}
+                title={`Created with ${cliInfo.label}`}
+              >
+                <CliIcon className="h-3 w-3 mr-0.5" />
+                {cliInfo.label}
+              </span>
               {session.compactionCount > 0 && (
                 <span
                   className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
@@ -81,9 +101,13 @@ export function SessionCard({ session }: SessionCardProps) {
               {session.isEncrypted && (
                 <Lock className="h-4 w-4 text-muted-foreground" />
               )}
-              <Badge variant={statusColors[session.status]}>
-                {statusLabels[session.status]}
-              </Badge>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  statusColors[session.status] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                }`}
+              >
+                {session.status}
+              </span>
             </div>
           </div>
         </CardHeader>

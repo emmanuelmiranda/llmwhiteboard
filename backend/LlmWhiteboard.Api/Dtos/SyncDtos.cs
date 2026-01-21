@@ -18,6 +18,11 @@ public class SyncPayload
     /// </summary>
     public string? SuggestedTitle { get; set; }
 
+    /// <summary>
+    /// The CLI tool type (claude-code, gemini-cli, etc.)
+    /// </summary>
+    public string? CliType { get; set; }
+
     [Required]
     public SyncEvent Event { get; set; } = null!;
 
@@ -61,6 +66,11 @@ public class TranscriptUploadRequest
     /// Optional title suggestion extracted from first user message in transcript
     /// </summary>
     public string? SuggestedTitle { get; set; }
+
+    /// <summary>
+    /// The CLI tool type (claude-code, gemini-cli, etc.)
+    /// </summary>
+    public string? CliType { get; set; }
 }
 
 public class TranscriptUploadResponse
@@ -76,6 +86,10 @@ public class TranscriptDownloadResponse
     public string LocalSessionId { get; set; } = null!;
     public string ProjectPath { get; set; } = null!;
     public string? MachineId { get; set; }
+    /// <summary>
+    /// The CLI tool type (claude-code, gemini-cli, etc.)
+    /// </summary>
+    public string CliType { get; set; } = "claude-code";
     public string Content { get; set; } = null!; // Base64 encoded
     public bool IsEncrypted { get; set; }
     public string Checksum { get; set; } = null!;

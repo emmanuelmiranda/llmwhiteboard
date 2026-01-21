@@ -35,6 +35,11 @@ public class Session
     public List<string> Tags { get; set; } = new();
 
     /// <summary>
+    /// The CLI tool that created this session (claude-code, gemini-cli, etc.)
+    /// </summary>
+    public string CliType { get; set; } = "claude-code";
+
+    /// <summary>
     /// Number of times this session has been auto-compacted (context summarized)
     /// </summary>
     public int CompactionCount { get; set; } = 0;

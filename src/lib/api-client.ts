@@ -89,12 +89,14 @@ class ApiClient {
   async getSessions(params?: {
     search?: string;
     status?: string;
+    cliType?: string;
     limit?: number;
     offset?: number;
   }) {
     const searchParams = new URLSearchParams();
     if (params?.search) searchParams.set("search", params.search);
     if (params?.status) searchParams.set("status", params.status);
+    if (params?.cliType) searchParams.set("cliType", params.cliType);
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.offset) searchParams.set("offset", params.offset.toString());
 
@@ -204,6 +206,7 @@ interface Session {
   description: string | null;
   status: SessionStatus;
   tags: string[];
+  cliType: string;
   machine: {
     id: string;
     machineId: string;
@@ -219,7 +222,6 @@ interface Session {
 }
 
 interface SessionDetail extends Session {
-  events: SessionEvent[];
   transcript: {
     id: string;
     isEncrypted: boolean;

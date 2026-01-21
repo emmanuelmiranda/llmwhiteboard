@@ -27,6 +27,7 @@ public class SessionsController : ControllerBase
     public async Task<ActionResult<SessionListResponse>> ListSessions(
         [FromQuery] string? search,
         [FromQuery] string? status,
+        [FromQuery] string? cliType,
         [FromQuery] int limit = 50,
         [FromQuery] int offset = 0)
     {
@@ -42,6 +43,7 @@ public class SessionsController : ControllerBase
         {
             Search = search,
             Status = statusEnum,
+            CliType = cliType,
             Limit = limit,
             Offset = offset
         });
@@ -167,6 +169,7 @@ public class SessionsController : ControllerBase
             Description = session.Description,
             Status = session.Status.ToString(),
             Tags = session.Tags,
+            CliType = session.CliType,
             Machine = session.Machine != null ? new MachineDto
             {
                 Id = session.Machine.Id,
@@ -195,6 +198,7 @@ public class SessionsController : ControllerBase
             Description = session.Description,
             Status = session.Status.ToString(),
             Tags = session.Tags,
+            CliType = session.CliType,
             Machine = session.Machine != null ? new MachineDto
             {
                 Id = session.Machine.Id,

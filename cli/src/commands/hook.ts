@@ -1,13 +1,18 @@
 /**
- * Hook command - processes hook events from Claude Code.
- * This is called via `npx llmwhiteboard hook` by Claude Code hooks.
+ * Hook command - processes hook events from LLM CLI tools.
+ * This is called via `npx llmwhiteboard hook --cli <type>` by CLI hooks.
+ *
+ * Supports:
+ * - Claude Code (--cli claude-code)
+ * - Gemini CLI (--cli gemini-cli)
  */
 
 import fs from "fs/promises";
 import path from "path";
-import os from "os";
 import { readConfig, getMachineId, readEncryptionKey, CONFIG_DIR } from "../lib/config.js";
 import { encrypt, computeChecksum } from "../lib/crypto.js";
+import { CliType, NormalizedHookContext } from "../lib/cli-adapter.js";
+import { getAdapter } from "../lib/adapters/index.js";
 
 // Default sync interval in seconds (upload transcript at most this often on Stop events)
 const DEFAULT_SYNC_INTERVAL_SECONDS = 60;
@@ -46,19 +51,6 @@ function shouldUploadTranscript(lastSyncTime: number, intervalSeconds: number): 
   return elapsed >= intervalSeconds * 1000;
 }
 
-interface HookContext {
-  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
-  session_id: string;
-  cwd: string;
-  tool_name?: string;
-  tool_input?: Record<string, unknown>;
-  tool_response?: { stdout?: string; stderr?: string };
-  message?: string;
-  transcript_path?: string;
-  trigger?: "manual" | "auto";
-  prompt?: string; // For UserPromptSubmit events
-}
-
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -90,20 +82,8 @@ function extractFirstUserMessage(transcriptContent: string): string | undefined 
   return undefined;
 }
 
-function getTranscriptPath(cwd: string, sessionId: string): string {
-  // Convert path separators to dashes (: \ / -> -)
-  // Using charCodeAt because regex escaping is unreliable for backslashes
-  const projectFolder = cwd.split("").map(c => {
-    const code = c.charCodeAt(0);
-    if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
-    return c;
-  }).join("").replace(/^-+/, "");
-  return path.join(os.homedir(), ".claude", "projects", projectFolder, `${sessionId}.jsonl`);
-}
-
-async function tryReadTranscriptTitle(cwd: string, sessionId: string): Promise<string | undefined> {
+async function tryReadTranscriptTitle(transcriptPath: string): Promise<string | undefined> {
   try {
-    const transcriptPath = getTranscriptPath(cwd, sessionId);
     const content = await fs.readFile(transcriptPath, "utf-8");
     return extractFirstUserMessage(content);
   } catch {
@@ -113,12 +93,11 @@ async function tryReadTranscriptTitle(cwd: string, sessionId: string): Promise<s
 
 async function uploadTranscript(
   config: { apiUrl: string; token: string; encryption?: { enabled: boolean } },
-  context: HookContext,
+  context: NormalizedHookContext,
   machineId: string
 ): Promise<boolean> {
   try {
-    // Use provided transcript_path or calculate it
-    const transcriptPath = context.transcript_path || getTranscriptPath(context.cwd, context.session_id);
+    const transcriptPath = context.transcriptPath;
 
     let content: Buffer;
     try {
@@ -150,12 +129,13 @@ async function uploadTranscript(
         Authorization: `Bearer ${config.token}`,
       },
       body: JSON.stringify({
-        localSessionId: context.session_id,
+        localSessionId: context.sessionId,
         machineId,
         content: content.toString("base64"),
         isEncrypted,
         checksum,
         suggestedTitle,
+        cliType: context.cliType,
       }),
     });
 
@@ -166,7 +146,7 @@ async function uploadTranscript(
     }
 
     // Update last sync time on success
-    await setLastSyncTime(context.session_id);
+    await setLastSyncTime(context.sessionId);
     return true;
   } catch (err) {
     console.error(`LLM Whiteboard transcript upload error: ${err instanceof Error ? err.message : err}`);
@@ -174,7 +154,23 @@ async function uploadTranscript(
   }
 }
 
-export async function hookCommand(): Promise<void> {
+// Map normalized event types to API event types
+const eventTypeMap: Record<string, string> = {
+  session_start: "session_start",
+  session_end: "session_end",
+  user_prompt: "user_prompt",
+  tool_use: "tool_use",
+  tool_use_start: "tool_use_start",
+  agent_stop: "stop",
+  subagent_stop: "subagent_stop",
+  context_compaction: "compaction",
+  permission_request: "permission_request",
+  notification: "message",
+  model_request: "model_request",
+  model_response: "model_response",
+};
+
+export async function hookCommand(cliType: CliType = "claude-code"): Promise<void> {
   try {
     const config = await readConfig();
     if (!config) {
@@ -186,65 +182,59 @@ export async function hookCommand(): Promise<void> {
       process.exit(0);
     }
 
-    const context: HookContext = JSON.parse(input);
+    // Get the appropriate adapter and parse the context
+    const adapter = getAdapter(cliType);
+    const context = adapter.parseHookContext(input);
+
     const machineId = await getMachineId();
 
-    const eventTypeMap: Record<string, string> = {
-      UserPromptSubmit: "user_prompt",
-      SessionStart: "session_start",
-      SessionEnd: "session_end",
-      PostToolUse: "tool_use",
-      Stop: "stop",
-      Notification: "message",
-      PreCompact: "compaction",
-    };
-
-    const eventType = eventTypeMap[context.hook_event_name];
+    const eventType = eventTypeMap[context.type];
     if (!eventType) {
       process.exit(0);
     }
 
+    // Try to get suggested title from transcript
     let suggestedTitle: string | undefined;
-    if (context.hook_event_name === "PostToolUse" || context.hook_event_name === "Stop") {
-      suggestedTitle = await tryReadTranscriptTitle(context.cwd, context.session_id);
+    if (context.type === "tool_use" || context.type === "agent_stop") {
+      suggestedTitle = await tryReadTranscriptTitle(context.transcriptPath);
     }
 
+    // Build event summary and metadata
     let eventSummary: string | undefined;
     let eventMetadata: Record<string, unknown> = {};
 
-    if (context.hook_event_name === "UserPromptSubmit") {
-      // Truncate prompt for summary, store full prompt in metadata
+    if (context.type === "user_prompt") {
       const prompt = context.prompt || "";
       eventSummary = prompt.length > 100 ? prompt.substring(0, 97) + "..." : prompt;
       eventMetadata = { prompt };
-      // Use prompt as suggested title if this is the first message
       if (!suggestedTitle) {
         suggestedTitle = eventSummary;
       }
-    } else if (context.hook_event_name === "PreCompact") {
-      eventSummary = context.trigger === "auto"
+    } else if (context.type === "context_compaction") {
+      eventSummary = context.compactionTrigger === "auto"
         ? "Auto-compaction triggered (context full)"
         : "Manual compaction triggered";
-      if (context.trigger) eventMetadata.trigger = context.trigger;
-    } else if (context.tool_name) {
-      eventSummary = `Used ${context.tool_name}`;
-      if (context.tool_input) eventMetadata.input = context.tool_input;
+      if (context.compactionTrigger) eventMetadata.trigger = context.compactionTrigger;
+    } else if (context.toolName) {
+      eventSummary = `Used ${context.toolName}`;
+      if (context.toolInput) eventMetadata.input = context.toolInput;
     } else {
       eventSummary = context.message;
     }
 
     const payload = {
-      localSessionId: context.session_id,
+      localSessionId: context.sessionId,
       projectPath: context.cwd,
       machineId,
       suggestedTitle,
+      cliType: context.cliType,
       event: {
         type: eventType,
-        toolName: context.tool_name,
+        toolName: context.toolName,
         summary: eventSummary,
         metadata: eventMetadata,
       },
-      timestamp: new Date().toISOString(),
+      timestamp: context.timestamp,
     };
 
     const response = await fetch(`${config.apiUrl}/api/sync`, {
@@ -263,13 +253,13 @@ export async function hookCommand(): Promise<void> {
 
     // Upload transcript based on event type
     const shouldUpload =
-      // Always upload on SessionEnd
-      context.hook_event_name === "SessionEnd" ||
-      // Always upload on PreCompact (before context gets summarized)
-      context.hook_event_name === "PreCompact" ||
-      // Upload on Stop if enough time has passed (throttled)
-      (context.hook_event_name === "Stop" &&
-        shouldUploadTranscript(await getLastSyncTime(context.session_id), DEFAULT_SYNC_INTERVAL_SECONDS));
+      // Always upload on session end
+      context.type === "session_end" ||
+      // Always upload on context compaction (before context gets summarized)
+      context.type === "context_compaction" ||
+      // Upload on agent stop if enough time has passed (throttled)
+      (context.type === "agent_stop" &&
+        shouldUploadTranscript(await getLastSyncTime(context.sessionId), DEFAULT_SYNC_INTERVAL_SECONDS));
 
     if (shouldUpload) {
       await uploadTranscript(config, context, machineId);

@@ -43,6 +43,8 @@ import {
   ChevronRight,
   ChevronDown,
   Zap,
+  Sparkles,
+  Bot,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import type { SessionStatus } from "@/types";
@@ -75,6 +77,7 @@ interface SessionDetail {
   description: string | null;
   status: SessionStatus;
   tags: string[];
+  cliType: string;
   machine: {
     id: string;
     machineId: string;
@@ -92,11 +95,26 @@ interface SessionDetail {
   createdAt: string;
 }
 
+const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string; resumeCommand: string }> = {
+  "claude-code": {
+    label: "Claude Code",
+    icon: Sparkles,
+    className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+    resumeCommand: "claude --continue",
+  },
+  "gemini-cli": {
+    label: "Gemini CLI",
+    icon: Bot,
+    className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+    resumeCommand: "gemini",
+  },
+};
+
 const statusLabels: Record<SessionStatus, string> = {
-  ACTIVE: "Active",
-  PAUSED: "Paused",
-  COMPLETED: "Completed",
-  ARCHIVED: "Archived",
+  Active: "Active",
+  Paused: "Paused",
+  Completed: "Completed",
+  Archived: "Archived",
 };
 
 export default function SessionDetailPage({
@@ -110,7 +128,7 @@ export default function SessionDetailPage({
   const [isSaving, setIsSaving] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<SessionStatus>("ACTIVE");
+  const [status, setStatus] = useState<SessionStatus>("Active");
   // Events pagination
   const [events, setEvents] = useState<SessionEvent[]>([]);
   const [eventsTotal, setEventsTotal] = useState(0);
@@ -467,9 +485,11 @@ export default function SessionDetailPage({
                       // Render session blocks
                       const blockId = block.startEvent.id;
                       const isExpanded = expandedBlocks.has(blockId);
-                      const promptCount = block.events.filter(e => e.eventType === "user_prompt").length;
+                      const userPrompts = block.events.filter(e => e.eventType === "user_prompt");
+                      const promptCount = userPrompts.length;
                       const toolCount = block.events.filter(e => e.eventType === "tool_use").length;
                       const startTime = new Date(block.startEvent.createdAt);
+                      const firstPrompt = userPrompts[0];
 
                       const toggleBlock = () => {
                         setExpandedBlocks(prev => {
@@ -497,12 +517,12 @@ export default function SessionDetailPage({
                             <Play className="h-4 w-4 text-green-500 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2 flex-wrap gap-1">
-                                <span className="text-sm font-medium">
+                                <span className="text-sm text-muted-foreground whitespace-nowrap">
                                   {formatRelativeTime(startTime)}
                                 </span>
-                                {promptCount > 0 && (
+                                {promptCount > 1 && (
                                   <Badge variant="secondary" className="text-xs">
-                                    {promptCount} prompt{promptCount !== 1 ? "s" : ""}
+                                    +{promptCount - 1} more
                                   </Badge>
                                 )}
                                 {toolCount > 0 && (
@@ -511,9 +531,9 @@ export default function SessionDetailPage({
                                   </Badge>
                                 )}
                               </div>
-                              {block.stopEvent?.summary && (
-                                <p className="text-xs text-muted-foreground mt-1 truncate">
-                                  {block.stopEvent.summary}
+                              {firstPrompt && (
+                                <p className="text-sm text-foreground mt-1">
+                                  {firstPrompt.summary || "User prompt"}
                                 </p>
                               )}
                             </div>
@@ -607,6 +627,26 @@ export default function SessionDetailPage({
               <CardTitle>Info</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
+              {(() => {
+                const cliInfo = cliConfig[session.cliType] || {
+                  label: session.cliType,
+                  icon: Bot,
+                  className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+                  resumeCommand: "",
+                };
+                const CliIcon = cliInfo.icon;
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center">
+                      <CliIcon className="h-4 w-4 mr-2" />
+                      CLI Tool
+                    </span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cliInfo.className}`}>
+                      {cliInfo.label}
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center">
                   <Clock className="h-4 w-4 mr-2" />
@@ -726,6 +766,12 @@ export default function SessionDetailPage({
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Then start {cliConfig[session.cliType]?.label || session.cliType} with:{" "}
+                <code className="bg-muted px-1 rounded">
+                  {cliConfig[session.cliType]?.resumeCommand || "your CLI tool"}
+                </code>
+              </p>
             </CardContent>
           </Card>
 
@@ -803,7 +849,7 @@ export default function SessionDetailPage({
                   <ol className="text-xs text-muted-foreground mt-2 space-y-1 list-decimal list-inside">
                     <li>Copy the resume command for your chosen checkpoint</li>
                     <li>Run it in your terminal on any machine</li>
-                    <li>Then run: <code className="bg-muted px-1 rounded">claude --continue</code></li>
+                    <li>Then run: <code className="bg-muted px-1 rounded">{cliConfig[session.cliType]?.resumeCommand || "your CLI tool"}</code></li>
                   </ol>
                 </div>
               </CardContent>

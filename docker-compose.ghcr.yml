@@ -27,6 +27,16 @@ services:
       timeout: 5s
       retries: 5
 
+  flyway:
+    image: flyway/flyway:10
+    container_name: llmwhiteboard-flyway
+    command: -url=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-llmwhiteboard} -user=${POSTGRES_USER:-llmwhiteboard} -password=${POSTGRES_PASSWORD:-llmwhiteboard} -baselineOnMigrate=true migrate
+    volumes:
+      - ./db/migrations:/flyway/sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     # UPDATE THIS: Replace 'emmanuelmiranda' with your GitHub username/org
     image: ghcr.io/emmanuelmiranda/llmwhiteboard-backend:${VERSION:-latest}
@@ -46,6 +56,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
 
   frontend:
     # UPDATE THIS: Replace 'emmanuelmiranda' with your GitHub username/org

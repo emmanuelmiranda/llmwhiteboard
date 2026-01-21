@@ -27,7 +27,7 @@ public class SyncController : ControllerBase
         ?? throw new UnauthorizedAccessException();
 
     /// <summary>
-    /// Receive sync events from Claude Code hooks (CLI)
+    /// Receive sync events from LLM CLI hooks (Claude Code, Gemini CLI, etc.)
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<SyncResponse>> Sync([FromBody] SyncPayload payload)
@@ -42,7 +42,8 @@ public class SyncController : ControllerBase
             userId,
             machine.Id,
             payload.LocalSessionId,
-            payload.ProjectPath);
+            payload.ProjectPath,
+            payload.CliType);
 
         // Set title from suggested title if session has no title yet
         if (string.IsNullOrEmpty(session.Title) && !string.IsNullOrEmpty(payload.SuggestedTitle))
@@ -139,7 +140,8 @@ public class SyncController : ControllerBase
             userId,
             machine.Id,
             request.LocalSessionId,
-            ""); // Project path should already exist
+            "", // Project path should already exist
+            request.CliType);
 
         // Decode content
         var content = Convert.FromBase64String(request.Content);
@@ -207,6 +209,7 @@ public class SyncController : ControllerBase
             LocalSessionId = session.LocalSessionId,
             ProjectPath = session.ProjectPath,
             MachineId = session.Machine?.MachineId,
+            CliType = session.CliType,
             Content = Convert.ToBase64String(session.Transcript.Content),
             IsEncrypted = session.Transcript.IsEncrypted,
             Checksum = session.Transcript.Checksum,
@@ -234,6 +237,7 @@ public class SyncController : ControllerBase
             LocalSessionId = snapshot.Session.LocalSessionId,
             ProjectPath = snapshot.Session.ProjectPath,
             MachineId = snapshot.Session.Machine?.MachineId,
+            CliType = snapshot.Session.CliType,
             Content = Convert.ToBase64String(snapshot.Content),
             IsEncrypted = snapshot.IsEncrypted,
             Checksum = snapshot.Checksum,
@@ -248,6 +252,7 @@ public class SyncController : ControllerBase
     public async Task<ActionResult<SessionListResponse>> ListSessions(
         [FromQuery] string? search,
         [FromQuery] string? status,
+        [FromQuery] string? cliType,
         [FromQuery] int limit = 50,
         [FromQuery] int offset = 0)
     {
@@ -263,6 +268,7 @@ public class SyncController : ControllerBase
         {
             Search = search,
             Status = statusEnum,
+            CliType = cliType,
             Limit = limit,
             Offset = offset
         });
@@ -278,6 +284,7 @@ public class SyncController : ControllerBase
                 Description = s.Description,
                 Status = s.Status.ToString(),
                 Tags = s.Tags,
+                CliType = s.CliType,
                 Machine = s.Machine != null ? new MachineDto
                 {
                     Id = s.Machine.Id,

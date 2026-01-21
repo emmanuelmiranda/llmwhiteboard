@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { SessionCard } from "@/components/SessionCard";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, LayoutGrid, List, Inbox } from "lucide-react";
+import { Search, LayoutGrid, List, Inbox, Sparkles, Bot } from "lucide-react";
 import { apiClient, type Session } from "@/lib/api-client";
 
 export default function SessionsPage() {
@@ -20,6 +20,7 @@ export default function SessionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [cliFilter, setCliFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const { toast } = useToast();
 
@@ -29,6 +30,7 @@ export default function SessionsPage() {
       const data = await apiClient.getSessions({
         search: search || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
+        cliType: cliFilter !== "all" ? cliFilter : undefined,
       });
       setSessions(data.sessions || []);
     } catch (error) {
@@ -44,7 +46,7 @@ export default function SessionsPage() {
 
   useEffect(() => {
     fetchSessions();
-  }, [statusFilter]);
+  }, [statusFilter, cliFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +59,7 @@ export default function SessionsPage() {
         <div>
           <h1 className="text-3xl font-bold">Sessions</h1>
           <p className="text-muted-foreground">
-            View and manage your Claude Code sessions
+            View and manage your LLM CLI sessions
           </p>
         </div>
       </div>
@@ -87,6 +89,27 @@ export default function SessionsPage() {
               <SelectItem value="Paused">Paused</SelectItem>
               <SelectItem value="Completed">Completed</SelectItem>
               <SelectItem value="Archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={cliFilter} onValueChange={setCliFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="CLI Tool" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All CLIs</SelectItem>
+              <SelectItem value="claude-code">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                  Claude
+                </span>
+              </SelectItem>
+              <SelectItem value="gemini-cli">
+                <span className="flex items-center gap-1.5">
+                  <Bot className="h-3.5 w-3.5 text-blue-500" />
+                  Gemini
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
 

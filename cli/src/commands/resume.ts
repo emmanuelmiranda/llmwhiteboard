@@ -1,11 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
-import os from "os";
 import chalk from "chalk";
 import inquirer from "inquirer";
 import { downloadTranscript, downloadSnapshot, listSessions, type Session } from "../lib/api.js";
 import { readConfig, readEncryptionKey } from "../lib/config.js";
 import { decrypt, computeChecksum } from "../lib/crypto.js";
+import { CliType } from "../lib/cli-adapter.js";
+import { getAdapter } from "../lib/adapters/index.js";
 
 interface ResumeOptions {
   search?: string;
@@ -50,7 +51,7 @@ export async function resumeCommand(
       } else {
         // Let user select from search results
         const choices = sessions.map((s: Session) => ({
-          name: `${s.title || s.localSessionId.slice(0, 8)} - ${s.projectPath.split(/[/\\]/).pop()}`,
+          name: `${s.title || s.localSessionId.slice(0, 8)} - ${s.projectPath.split(/[/\\]/).pop()} (${s.cliType || 'claude-code'})`,
           value: s.id,
         }));
 
@@ -81,9 +82,14 @@ export async function resumeCommand(
       transcript = await downloadTranscript(targetSessionId!);
     }
 
+    // Determine CLI type (default to claude-code for backwards compatibility)
+    const cliType = (transcript.cliType || "claude-code") as CliType;
+    const adapter = getAdapter(cliType);
+
     console.log(chalk.dim(`→ Received transcript:`));
     console.log(chalk.dim(`    Local Session ID: ${transcript.localSessionId}`));
     console.log(chalk.dim(`    Project Path: ${transcript.projectPath}`));
+    console.log(chalk.dim(`    CLI Type: ${adapter.displayName}`));
     console.log(chalk.dim(`    Size: ${(transcript.sizeBytes / 1024).toFixed(1)} KB`));
     console.log(chalk.dim(`    Encrypted: ${transcript.isEncrypted ? 'Yes' : 'No'}`));
 
@@ -134,28 +140,19 @@ export async function resumeCommand(
       }
     }
 
-    // Determine the target directory based on CURRENT working directory
-    // Claude Code looks for sessions based on cwd, not original project path
+    // Determine the target directory based on CURRENT working directory and CLI type
     const cwd = process.cwd();
     const originalProjectPath = transcript.projectPath;
-    const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
+
+    // Get the transcript path using the adapter
+    const transcriptPath = adapter.getTranscriptPath(cwd, transcript.localSessionId);
+    const targetDir = path.dirname(transcriptPath);
 
     // Warn if resuming to a different path than original
     if (path.basename(cwd) !== path.basename(originalProjectPath)) {
       console.log(chalk.yellow(`⚠ Original project: ${originalProjectPath}`));
       console.log(chalk.yellow(`  Current directory: ${cwd}`));
     }
-
-    // Create a sanitized project path for storage
-    // Must match Claude Code's format exactly:
-    // - /Users/foo -> -Users-foo (Unix, keeps leading dash)
-    // - D:\sources\foo -> D--sources-foo (Windows, no leading dash)
-    const sanitizedProjectPath = cwd.split("").map(c => {
-      const code = c.charCodeAt(0);
-      if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
-      return c;
-    }).join("");
-    const targetDir = path.join(claudeProjectsDir, sanitizedProjectPath);
 
     console.log(chalk.dim(`→ Target directory: ${targetDir}`));
 
@@ -164,7 +161,6 @@ export async function resumeCommand(
     await fs.mkdir(targetDir, { recursive: true });
 
     // Write the transcript file
-    const transcriptPath = path.join(targetDir, `${transcript.localSessionId}.jsonl`);
     console.log(chalk.dim(`→ Writing transcript to: ${transcriptPath}`));
     await fs.writeFile(transcriptPath, content);
     console.log(chalk.dim(`    Written ${content.length} bytes`));
@@ -173,7 +169,7 @@ export async function resumeCommand(
 
     console.log(chalk.white(`\nSession restored to: ${transcriptPath}`));
     console.log(chalk.bold("\nTo resume this session, run:"));
-    console.log(chalk.cyan(`  claude --resume ${transcript.localSessionId}`));
+    console.log(chalk.cyan(`  ${adapter.getResumeCommand(transcript.localSessionId)}`));
   } catch (error) {
     console.error(chalk.red(`\n✗ Failed to resume session`));
     console.error(chalk.red(`  Error: ${error instanceof Error ? error.message : error}`));

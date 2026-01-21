@@ -15,7 +15,7 @@ public class SessionService : ISessionService
         _db = db;
     }
 
-    public async Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath)
+    public async Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath, string? cliType = null)
     {
         var session = await _db.Sessions
             .FirstOrDefaultAsync(s =>
@@ -27,6 +27,11 @@ public class SessionService : ISessionService
         {
             session.LastActivityAt = DateTime.UtcNow;
             session.UpdatedAt = DateTime.UtcNow;
+            // Update cliType if provided and not already set (in case of migration from old client)
+            if (!string.IsNullOrEmpty(cliType) && session.CliType == "claude-code" && cliType != "claude-code")
+            {
+                session.CliType = cliType;
+            }
             await _db.SaveChangesAsync();
             return session;
         }
@@ -37,7 +42,8 @@ public class SessionService : ISessionService
             MachineId = machineId,
             LocalSessionId = localSessionId,
             ProjectPath = projectPath,
-            Status = SessionStatus.Active
+            Status = SessionStatus.Active,
+            CliType = cliType ?? "claude-code"
         };
 
         _db.Sessions.Add(session);
@@ -73,6 +79,11 @@ public class SessionService : ISessionService
                 (s.Description != null && s.Description.ToLower().Contains(search)) ||
                 s.ProjectPath.ToLower().Contains(search) ||
                 s.Tags.Contains(query.Search));
+        }
+
+        if (!string.IsNullOrEmpty(query.CliType))
+        {
+            baseQuery = baseQuery.Where(s => s.CliType == query.CliType);
         }
 
         var total = await baseQuery.CountAsync();

@@ -11,6 +11,10 @@ public class SessionDto
     public string? Description { get; set; }
     public string Status { get; set; } = null!;
     public List<string> Tags { get; set; } = new();
+    /// <summary>
+    /// The CLI tool type (claude-code, gemini-cli, etc.)
+    /// </summary>
+    public string CliType { get; set; } = "claude-code";
     public MachineDto? Machine { get; set; }
     public bool HasTranscript { get; set; }
     public bool IsEncrypted { get; set; }

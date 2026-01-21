@@ -21,6 +21,7 @@ interface Session {
   description: string | null;
   status: string;
   tags: string[];
+  cliType: string; // claude-code or gemini-cli
   machine: {
     id: string;
     machineId: string;
@@ -45,6 +46,7 @@ interface TranscriptResponse {
   localSessionId: string;
   projectPath: string;
   machineId: string;
+  cliType: string; // claude-code or gemini-cli
   content: string; // base64
   isEncrypted: boolean;
   checksum: string;

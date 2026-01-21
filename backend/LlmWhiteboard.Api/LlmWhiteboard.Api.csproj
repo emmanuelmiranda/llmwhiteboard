@@ -4,6 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <PackageLicenseExpression>Elastic-2.0</PackageLicenseExpression>
+    <Copyright>Copyright 2024-2025 Emmanuel Miranda-Steiner</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

@@ -2,7 +2,7 @@ import chalk from "chalk";
 import inquirer from "inquirer";
 import ora from "ora";
 import { deleteConfig } from "../lib/config.js";
-import { uninstallHooks } from "../lib/hooks.js";
+import { uninstallAllHooks, detectInstalledClis, getAdapter } from "../lib/hooks.js";
 
 export async function logoutCommand(): Promise<void> {
   const confirm = await inquirer.prompt([
@@ -22,15 +22,29 @@ export async function logoutCommand(): Promise<void> {
   const spinner = ora("Removing configuration...").start();
 
   try {
-    // Uninstall hooks
-    spinner.text = "Removing Claude Code hooks...";
-    await uninstallHooks();
+    // Detect installed CLIs to uninstall hooks from
+    spinner.text = "Detecting installed CLI tools...";
+    const installedClis = await detectInstalledClis();
+
+    // Uninstall hooks from all installed CLIs
+    if (installedClis.length > 0) {
+      for (const cliType of installedClis) {
+        const adapter = getAdapter(cliType);
+        spinner.text = `Removing ${adapter.displayName} hooks...`;
+        // Continue even if one fails
+      }
+      await uninstallAllHooks();
+    }
 
     // Delete configuration
     spinner.text = "Deleting configuration...";
     await deleteConfig();
 
     spinner.succeed("Configuration removed successfully!");
+
+    if (installedClis.length > 0) {
+      console.log(chalk.dim(`\nHooks removed from: ${installedClis.map(c => getAdapter(c).displayName).join(", ")}`));
+    }
 
     console.log(chalk.yellow("\nNote: Your encryption key (if any) was NOT deleted."));
     console.log(chalk.yellow("To remove it: rm ~/.llmwhiteboard/encryption.key"));

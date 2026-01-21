@@ -77,9 +77,21 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-                builder.Configuration["Frontend:Url"] ?? "https://llmwhiteboard.com"
-            )
+        var frontendUrl = builder.Configuration["Frontend:Url"];
+        var origins = new List<string>
+        {
+            "https://llmwhiteboard.com",
+            "https://www.llmwhiteboard.com",
+            "http://localhost:22000",
+            "http://localhost:3000"
+        };
+
+        if (!string.IsNullOrEmpty(frontendUrl) && !origins.Contains(frontendUrl))
+        {
+            origins.Add(frontendUrl);
+        }
+
+        policy.WithOrigins(origins.ToArray())
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();

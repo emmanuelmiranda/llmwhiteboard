@@ -1,6 +1,12 @@
 import chalk from "chalk";
 import { readConfig, readEncryptionKey, getKeyFingerprint } from "../lib/config.js";
-import { areHooksInstalled, getHooksFilePath } from "../lib/hooks.js";
+import {
+  getHooksStatus,
+  getHooksFilePath,
+  getAdapter,
+  getAllCliTypes,
+  CliType,
+} from "../lib/hooks.js";
 
 export async function statusCommand(): Promise<void> {
   console.log(chalk.bold("\nLLM Whiteboard Status\n"));
@@ -34,24 +40,40 @@ export async function statusCommand(): Promise<void> {
 
   console.log();
 
-  // Check both project-level and global hooks
-  const projectHooksInstalled = await areHooksInstalled(process.cwd());
-  const globalHooksInstalled = await areHooksInstalled();
+  // Check hooks status for all CLI types
+  console.log(chalk.dim("CLI Tools:"));
 
-  if (projectHooksInstalled) {
-    console.log(chalk.green(`Hooks: Installed (project-level)`));
-    console.log(chalk.dim(`  ${getHooksFilePath(process.cwd())}`));
-  } else if (globalHooksInstalled) {
-    console.log(chalk.green(`Hooks: Installed (global)`));
-    console.log(chalk.dim(`  ${getHooksFilePath()}`));
-  } else {
-    console.log(chalk.yellow("Hooks: Not installed"));
-    console.log(chalk.dim("  Run: npx llmwhiteboard init"));
+  const globalStatus = await getHooksStatus("user");
+  const projectStatus = await getHooksStatus("project", process.cwd());
+
+  for (const cliType of getAllCliTypes()) {
+    const adapter = getAdapter(cliType);
+    const global = globalStatus.get(cliType);
+    const project = projectStatus.get(cliType);
+
+    if (!global?.cliInstalled) {
+      console.log(`  ${adapter.displayName}: ${chalk.dim("Not installed")}`);
+      continue;
+    }
+
+    const projectHooks = project?.installed;
+    const globalHooks = global?.installed;
+
+    if (projectHooks) {
+      console.log(`  ${adapter.displayName}: ${chalk.green("Hooks installed (project-level)")}`);
+      console.log(chalk.dim(`    ${getHooksFilePath(cliType, "project", process.cwd())}`));
+    } else if (globalHooks) {
+      console.log(`  ${adapter.displayName}: ${chalk.green("Hooks installed (global)")}`);
+      console.log(chalk.dim(`    ${getHooksFilePath(cliType, "user")}`));
+    } else {
+      console.log(`  ${adapter.displayName}: ${chalk.yellow("Hooks not installed")}`);
+    }
   }
 
   console.log();
   console.log(chalk.dim("Commands:"));
   console.log(chalk.dim("  npx llmwhiteboard list       - List your sessions"));
   console.log(chalk.dim("  npx llmwhiteboard resume     - Resume a session"));
+  console.log(chalk.dim("  npx llmwhiteboard init --hooks-only  - Reinstall hooks"));
   console.log(chalk.dim("  npx llmwhiteboard logout     - Remove configuration"));
 }
