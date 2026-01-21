@@ -31,10 +31,10 @@ interface TimelineEvent {
 }
 
 const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "secondary"> = {
-  ACTIVE: "success",
-  PAUSED: "warning",
-  COMPLETED: "default",
-  ARCHIVED: "secondary",
+  Active: "success",
+  Paused: "warning",
+  Completed: "default",
+  Archived: "secondary",
 };
 
 export default function TimelinePage() {
