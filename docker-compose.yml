@@ -44,6 +44,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:22001
     container_name: llmwhiteboard-web
     restart: unless-stopped
     ports:
