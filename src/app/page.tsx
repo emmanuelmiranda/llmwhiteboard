@@ -182,9 +182,9 @@ export default function LandingPage() {
 
           <div className="mt-16 grid gap-8 md:grid-cols-2 lg:max-w-4xl lg:mx-auto">
             <PricingCard
-              title="Free"
+              title="Free (Beta)"
               price="$0"
-              description="Perfect for individual developers"
+              description="Free while in beta - no guarantees on pricing or availability"
               features={[
                 "Unlimited sessions",
                 "Cross-machine resume",
@@ -231,7 +231,7 @@ export default function LandingPage() {
                 GitHub
               </a>
               <a
-                href="/docs"
+                href="https://github.com/emmanuelmiranda/llmwhiteboard#readme"
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
                 Docs
