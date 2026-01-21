@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 import chalk from "chalk";
 import inquirer from "inquirer";
 import { downloadTranscript, downloadSnapshot, listSessions, type Session } from "../lib/api.js";
@@ -144,8 +145,19 @@ export async function resumeCommand(
     const cwd = process.cwd();
     const originalProjectPath = transcript.projectPath;
 
+    // For snapshot resume, always fork with a new session ID
+    // For regular resume, use the original session ID
+    const isSnapshotResume = !!options.snapshot;
+    const localSessionId = isSnapshotResume
+      ? crypto.randomUUID()
+      : transcript.localSessionId;
+
+    if (isSnapshotResume) {
+      console.log(chalk.dim(`→ Snapshot resume: forking to new session ${localSessionId.slice(0, 8)}...`));
+    }
+
     // Get the transcript path using the adapter
-    const transcriptPath = adapter.getTranscriptPath(cwd, transcript.localSessionId);
+    const transcriptPath = adapter.getTranscriptPath(cwd, localSessionId);
     const targetDir = path.dirname(transcriptPath);
 
     // Warn if resuming to a different path than original
@@ -156,32 +168,49 @@ export async function resumeCommand(
 
     console.log(chalk.dim(`→ Target directory: ${targetDir}`));
 
-    // Check if file already exists
-    let fileExists = false;
-    try {
-      await fs.access(transcriptPath);
-      fileExists = true;
-    } catch {
-      // File doesn't exist, safe to write
-    }
+    // Check if file already exists (only relevant for non-snapshot resume)
+    if (!isSnapshotResume) {
+      let existingContent: Buffer | null = null;
+      try {
+        existingContent = await fs.readFile(transcriptPath);
+      } catch {
+        // File doesn't exist, safe to write
+      }
 
-    if (fileExists) {
-      const stat = await fs.stat(transcriptPath);
-      console.log(chalk.yellow(`\n⚠ Local session already exists at: ${transcriptPath}`));
-      console.log(chalk.yellow(`  Size: ${(stat.size / 1024).toFixed(1)} KB, Modified: ${stat.mtime.toLocaleString()}`));
+      if (existingContent) {
+        // Compare checksums to see if content is the same
+        const localChecksum = computeChecksum(existingContent);
+        const downloadedChecksum = computeChecksum(content);
 
-      const { confirm } = await inquirer.prompt([
-        {
-          type: "confirm",
-          name: "confirm",
-          message: "Overwrite local session with downloaded version?",
-          default: false,
-        },
-      ]);
+        if (localChecksum === downloadedChecksum) {
+          console.log(chalk.green("\n✓ Local session is already up to date!"));
+          console.log(chalk.white(`\nSession at: ${transcriptPath}`));
+          console.log(chalk.bold("\nTo resume this session, run:"));
+          console.log(chalk.cyan(`  ${adapter.getResumeCommand(localSessionId)}`));
+          return;
+        }
 
-      if (!confirm) {
-        console.log(chalk.dim("\nResume cancelled."));
-        return;
+        // Content differs - prompt user
+        const stat = await fs.stat(transcriptPath);
+        console.log(chalk.yellow(`\n⚠ Local session differs from cloud version`));
+        console.log(chalk.yellow(`  Local: ${(existingContent.length / 1024).toFixed(1)} KB, Modified: ${stat.mtime.toLocaleString()}`));
+        console.log(chalk.yellow(`  Cloud: ${(content.length / 1024).toFixed(1)} KB`));
+
+        const { confirm } = await inquirer.prompt([
+          {
+            type: "confirm",
+            name: "confirm",
+            message: "Overwrite local session with cloud version?",
+            default: false,
+          },
+        ]);
+
+        if (!confirm) {
+          console.log(chalk.dim("\nResume cancelled. Your local session is unchanged."));
+          console.log(chalk.bold("\nTo resume your local session, run:"));
+          console.log(chalk.cyan(`  ${adapter.getResumeCommand(localSessionId)}`));
+          return;
+        }
       }
     }
 
@@ -194,11 +223,16 @@ export async function resumeCommand(
     await fs.writeFile(transcriptPath, content);
     console.log(chalk.dim(`    Written ${content.length} bytes`));
 
-    console.log(chalk.green("\n✓ Session restored successfully!"));
+    if (isSnapshotResume) {
+      console.log(chalk.green("\n✓ Session forked successfully!"));
+      console.log(chalk.dim(`  New session created from snapshot`));
+    } else {
+      console.log(chalk.green("\n✓ Session restored successfully!"));
+    }
 
     console.log(chalk.white(`\nSession restored to: ${transcriptPath}`));
     console.log(chalk.bold("\nTo resume this session, run:"));
-    console.log(chalk.cyan(`  ${adapter.getResumeCommand(transcript.localSessionId)}`));
+    console.log(chalk.cyan(`  ${adapter.getResumeCommand(localSessionId)}`));
   } catch (error) {
     console.error(chalk.red(`\n✗ Failed to resume session`));
     console.error(chalk.red(`  Error: ${error instanceof Error ? error.message : error}`));
