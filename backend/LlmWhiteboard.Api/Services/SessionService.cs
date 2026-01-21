@@ -90,19 +90,41 @@ public class SessionService : ISessionService
 
         var sessions = await baseQuery
             .Include(s => s.Machine)
-            .Include(s => s.Transcript)
+            // Don't include Transcript here - it loads the full content blob
             .OrderByDescending(s => s.LastActivityAt)
             .Skip(query.Offset)
             .Take(Math.Min(query.Limit, 100))
             .ToListAsync();
 
-        // Load event counts efficiently with a separate query
         var sessionIds = sessions.Select(s => s.Id).ToList();
+
+        // Load event counts efficiently with a separate query
         var eventCounts = await _db.SessionEvents
             .Where(e => sessionIds.Contains(e.SessionId))
             .GroupBy(e => e.SessionId)
             .Select(g => new { SessionId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.SessionId, x => x.Count);
+
+        // Load transcript metadata (size, encrypted) without loading content
+        var transcriptInfo = await _db.SessionTranscripts
+            .Where(t => sessionIds.Contains(t.SessionId))
+            .Select(t => new { t.SessionId, t.SizeBytes, t.IsEncrypted })
+            .ToDictionaryAsync(x => x.SessionId, x => new { x.SizeBytes, x.IsEncrypted });
+
+        // Attach transcript info to sessions (lightweight - no content loaded)
+        foreach (var session in sessions)
+        {
+            if (transcriptInfo.TryGetValue(session.Id, out var info))
+            {
+                session.Transcript = new SessionTranscript
+                {
+                    SessionId = session.Id,
+                    SizeBytes = info.SizeBytes,
+                    IsEncrypted = info.IsEncrypted,
+                    Content = Array.Empty<byte>() // Don't load actual content
+                };
+            }
+        }
 
         return (sessions, total, eventCounts);
     }
