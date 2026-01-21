@@ -8,6 +8,7 @@ import { resumeCommand } from "./commands/resume.js";
 import { statusCommand } from "./commands/status.js";
 import { logoutCommand } from "./commands/logout.js";
 import { rotateKeyCommand } from "./commands/rotate-key.js";
+import { hookCommand } from "./commands/hook.js";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json");
@@ -57,5 +58,11 @@ program
   .command("rotate-key")
   .description("Rotate encryption key (re-encrypts all sessions)")
   .action(rotateKeyCommand);
+
+// Hidden hook command - called by Claude Code hooks
+program
+  .command("hook", { hidden: true })
+  .description("Process hook events from Claude Code (internal)")
+  .action(hookCommand);
 
 program.parse();

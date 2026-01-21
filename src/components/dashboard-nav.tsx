@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
@@ -22,6 +28,7 @@ import {
   Monitor,
   LogOut,
   HelpCircle,
+  Menu,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import type { User } from "@/lib/api-client";
@@ -42,16 +49,68 @@ const settingsItems = [
 export function DashboardNav({ user }: { user: User }) {
   const pathname = usePathname();
   const { logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
+      <div className="container flex h-14 items-center px-4">
+        {/* Mobile menu button */}
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetTrigger asChild className="md:hidden">
+            <Button variant="ghost" size="icon" className="mr-2">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64">
+            <nav className="flex flex-col space-y-4 mt-6">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center space-x-3 px-2 py-2 rounded-md transition-colors",
+                    pathname === item.href
+                      ? "bg-muted text-foreground"
+                      : "text-foreground/60 hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+              <div className="border-t pt-4 mt-4">
+                <p className="px-2 text-xs font-semibold text-muted-foreground mb-2">Settings</p>
+                {settingsItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center space-x-3 px-2 py-2 rounded-md transition-colors",
+                      pathname === item.href
+                        ? "bg-muted text-foreground"
+                        : "text-foreground/60 hover:text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </nav>
+          </SheetContent>
+        </Sheet>
+
         <Link href="/sessions" className="mr-6 flex items-center space-x-2">
           <div className="h-6 w-6 rounded bg-primary" />
-          <span className="font-bold">LLM Whiteboard</span>
+          <span className="font-bold hidden sm:inline">LLM Whiteboard</span>
+          <span className="font-bold sm:hidden">LWB</span>
         </Link>
 
-        <nav className="flex items-center space-x-6 text-sm font-medium">
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
           {navItems.map((item) => (
             <Link
               key={item.href}

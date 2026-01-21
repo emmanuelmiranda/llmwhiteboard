@@ -50,7 +50,7 @@ async function writeClaudeSettings(settings: ClaudeSettings, projectPath?: strin
 }
 
 function getHookCommand(): string {
-  return "npx llmwhiteboard-hook";
+  return "npx llmwhiteboard hook";
 }
 
 function createHookEntry(command: string, matcher?: string): HookEntry {
