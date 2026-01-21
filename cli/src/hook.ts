@@ -152,7 +152,12 @@ function extractFirstUserMessage(transcriptContent: string): string | undefined 
 function getTranscriptPath(cwd: string, sessionId: string): string {
   // Claude stores transcripts at ~/.claude/projects/<project-folder>/<session-id>.jsonl
   // Project folder is cwd with path separators replaced: D:\sources\foo -> D--sources-foo
-  const projectFolder = cwd.replace(/[:\\\/]/g, "-").replace(/^-+/, "");
+  // Using charCodeAt because regex escaping is unreliable for backslashes
+  const projectFolder = cwd.split("").map(c => {
+    const code = c.charCodeAt(0);
+    if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
+    return c;
+  }).join("").replace(/^-+/, "");
   return path.join(os.homedir(), ".claude", "projects", projectFolder, `${sessionId}.jsonl`);
 }
 

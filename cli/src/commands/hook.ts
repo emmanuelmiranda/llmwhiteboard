@@ -53,7 +53,13 @@ function extractFirstUserMessage(transcriptContent: string): string | undefined 
 }
 
 function getTranscriptPath(cwd: string, sessionId: string): string {
-  const projectFolder = cwd.replace(/[:\\\/]/g, "-").replace(/^-+/, "");
+  // Convert path separators to dashes (: \ / -> -)
+  // Using charCodeAt because regex escaping is unreliable for backslashes
+  const projectFolder = cwd.split("").map(c => {
+    const code = c.charCodeAt(0);
+    if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
+    return c;
+  }).join("").replace(/^-+/, "");
   return path.join(os.homedir(), ".claude", "projects", projectFolder, `${sessionId}.jsonl`);
 }
 
