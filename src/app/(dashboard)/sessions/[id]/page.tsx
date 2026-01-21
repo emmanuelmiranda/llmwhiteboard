@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,6 @@ interface SessionDetail {
     sizeBytes: number;
     uploadedAt: string;
   } | null;
-  events: SessionEvent[];
   compactionCount: number;
   totalTokensUsed: number;
   lastActivityAt: string;
@@ -95,9 +94,9 @@ const statusLabels: Record<SessionStatus, string> = {
 export default function SessionDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id } = params;
+  const { id } = use(params);
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -158,9 +157,8 @@ export default function SessionDetailPage({
         setTitle(data.session.title || "");
         setDescription(data.session.description || "");
         setStatus(data.session.status);
-        // Load events and snapshots separately
-        await loadEvents(0);
-        await loadSnapshots();
+        // Load events and snapshots in parallel
+        await Promise.all([loadEvents(0), loadSnapshots()]);
       } catch (error) {
         toast({
           title: "Error",
@@ -174,7 +172,7 @@ export default function SessionDetailPage({
     };
 
     fetchSession();
-  }, [id, router, toast]);
+  }, [id]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -458,7 +456,7 @@ export default function SessionDetailPage({
                   <Activity className="h-4 w-4 mr-2" />
                   Events
                 </span>
-                <span>{session.events.length}</span>
+                <span>{eventsTotal}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center">

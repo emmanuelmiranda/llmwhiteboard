@@ -29,7 +29,7 @@ public class SessionDto
 
 public class SessionDetailDto : SessionDto
 {
-    public List<SessionEventDto> Events { get; set; } = new();
+    // Events are loaded separately via GET /sessions/{id}/events for pagination
     public TranscriptInfoDto? Transcript { get; set; }
 }
 

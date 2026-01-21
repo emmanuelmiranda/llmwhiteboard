@@ -184,6 +184,7 @@ public class SessionsController : ControllerBase
 
     private static SessionDetailDto MapToDetailDto(Session session)
     {
+        // Events are loaded separately via GET /sessions/{id}/events for pagination
         return new SessionDetailDto
         {
             Id = session.Id,
@@ -201,20 +202,10 @@ public class SessionsController : ControllerBase
             } : null,
             HasTranscript = session.Transcript != null,
             IsEncrypted = session.Transcript?.IsEncrypted ?? false,
-            EventCount = session.Events.Count,
             CompactionCount = session.CompactionCount,
             TotalTokensUsed = session.TotalTokensUsed,
             LastActivityAt = session.LastActivityAt,
             CreatedAt = session.CreatedAt,
-            Events = session.Events.Select(e => new SessionEventDto
-            {
-                Id = e.Id,
-                SessionId = e.SessionId,
-                EventType = e.EventType,
-                ToolName = e.ToolName,
-                Summary = e.Summary,
-                CreatedAt = e.CreatedAt
-            }).ToList(),
             Transcript = session.Transcript != null ? new TranscriptInfoDto
             {
                 Id = session.Transcript.Id,

@@ -48,10 +48,10 @@ public class SessionService : ISessionService
 
     public async Task<Session?> GetSessionAsync(string sessionId, string userId)
     {
+        // Don't include Events here - they're loaded separately via GetSessionEventsAsync for pagination
         return await _db.Sessions
             .Include(s => s.Machine)
             .Include(s => s.Transcript)
-            .Include(s => s.Events.OrderByDescending(e => e.CreatedAt).Take(500))
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
     }
 
