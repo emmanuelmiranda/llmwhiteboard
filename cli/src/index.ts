@@ -43,6 +43,7 @@ program
   .description("Download and restore a session for resuming")
   .option("-s, --search <query>", "Search for a session by query")
   .option("--latest", "Resume the most recent session")
+  .option("--snapshot <id>", "Resume from a specific snapshot/checkpoint")
   .action(resumeCommand);
 
 program

@@ -179,6 +179,13 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // Snapshots
+  async getSessionSnapshots(sessionId: string) {
+    return this.request<SnapshotListResponse>(
+      `/api/sessions/${sessionId}/snapshots`
+    );
+  }
 }
 
 // Types
@@ -260,6 +267,21 @@ interface Machine {
   sessionCount: number;
 }
 
+interface Snapshot {
+  id: string;
+  sessionId: string;
+  compactionCycle: number;
+  type: "PostCompaction" | "Checkpoint" | "Delta";
+  sizeBytes: number;
+  contextPercentage: number | null;
+  isEncrypted: boolean;
+  createdAt: string;
+}
+
+interface SnapshotListResponse {
+  snapshots: Snapshot[];
+}
+
 export const apiClient = new ApiClient();
 export type {
   User,
@@ -270,4 +292,6 @@ export type {
   SessionEvent,
   ApiToken,
   Machine,
+  Snapshot,
+  SnapshotListResponse,
 };

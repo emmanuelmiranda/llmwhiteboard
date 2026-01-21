@@ -21,6 +21,7 @@ public interface ISessionService
     Task SavePeriodicSnapshotAsync(string sessionId, byte[] content, bool isEncrypted, string checksum);
     Task ProcessCompactionAsync(string sessionId);
     Task<List<TranscriptSnapshot>> GetSnapshotsAsync(string sessionId, string userId);
+    Task<TranscriptSnapshot?> GetSnapshotByIdAsync(string snapshotId, string userId);
 }
 
 public class SessionListQuery

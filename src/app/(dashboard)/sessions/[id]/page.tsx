@@ -33,6 +33,9 @@ import {
   Trash2,
   RefreshCw,
   AlertTriangle,
+  History,
+  GitBranch,
+  Check,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import type { SessionStatus } from "@/types";
@@ -42,6 +45,17 @@ interface SessionEvent {
   eventType: string;
   toolName: string | null;
   summary: string | null;
+  createdAt: string;
+}
+
+interface Snapshot {
+  id: string;
+  sessionId: string;
+  compactionCycle: number;
+  type: "PostCompaction" | "Checkpoint" | "Delta";
+  sizeBytes: number;
+  contextPercentage: number | null;
+  isEncrypted: boolean;
   createdAt: string;
 }
 
@@ -95,6 +109,10 @@ export default function SessionDetailPage({
   const [eventsTotal, setEventsTotal] = useState(0);
   const [eventsLoading, setEventsLoading] = useState(false);
   const EVENTS_PAGE_SIZE = 50;
+  // Snapshots
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [copiedSnapshotId, setCopiedSnapshotId] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -119,6 +137,19 @@ export default function SessionDetailPage({
     }
   };
 
+  const loadSnapshots = async () => {
+    setSnapshotsLoading(true);
+    try {
+      const data = await apiClient.getSessionSnapshots(id);
+      setSnapshots(data.snapshots);
+    } catch (error) {
+      // Snapshots may not exist for older sessions
+      setSnapshots([]);
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -127,8 +158,9 @@ export default function SessionDetailPage({
         setTitle(data.session.title || "");
         setDescription(data.session.description || "");
         setStatus(data.session.status);
-        // Load events separately with pagination
+        // Load events and snapshots separately
         await loadEvents(0);
+        await loadSnapshots();
       } catch (error) {
         toast({
           title: "Error",
@@ -195,6 +227,43 @@ export default function SessionDetailPage({
       title: "Copied",
       description: "Resume command copied to clipboard",
     });
+  };
+
+  const copySnapshotResumeCommand = (snapshot: Snapshot) => {
+    const command = `npx llmwhiteboard resume ${session?.id} --snapshot ${snapshot.id}`;
+    navigator.clipboard.writeText(command);
+    setCopiedSnapshotId(snapshot.id);
+    toast({
+      title: "Copied",
+      description: `Resume command for ${getSnapshotLabel(snapshot)} copied`,
+    });
+    setTimeout(() => setCopiedSnapshotId(null), 2000);
+  };
+
+  const getSnapshotLabel = (snapshot: Snapshot) => {
+    switch (snapshot.type) {
+      case "PostCompaction":
+        return `Fresh start (after compaction #${snapshot.compactionCycle})`;
+      case "Checkpoint":
+        return `${snapshot.contextPercentage || 80}% checkpoint (cycle #${snapshot.compactionCycle})`;
+      case "Delta":
+        return `Final 20% (cycle #${snapshot.compactionCycle})`;
+      default:
+        return snapshot.type;
+    }
+  };
+
+  const getSnapshotDescription = (snapshot: Snapshot) => {
+    switch (snapshot.type) {
+      case "PostCompaction":
+        return "Resume with fresh context after compaction summary";
+      case "Checkpoint":
+        return "Resume with ~80% context - recommended for most cases";
+      case "Delta":
+        return "View-only: shows what happened in the final stretch";
+      default:
+        return "";
+    }
   };
 
   if (isLoading) {
@@ -480,6 +549,87 @@ export default function SessionDetailPage({
               </div>
             </CardContent>
           </Card>
+
+          {snapshots.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <History className="h-4 w-4 mr-2" />
+                  Time Travel
+                </CardTitle>
+                <CardDescription>
+                  Resume from a previous checkpoint
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {snapshots
+                  .filter(s => s.type !== "Delta")
+                  .map((snapshot) => (
+                    <div
+                      key={snapshot.id}
+                      className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <GitBranch className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium text-sm">
+                            {getSnapshotLabel(snapshot)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {getSnapshotDescription(snapshot)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(snapshot.sizeBytes / 1024).toFixed(1)} KB • {formatRelativeTime(new Date(snapshot.createdAt))}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => copySnapshotResumeCommand(snapshot)}
+                        className="ml-2 shrink-0"
+                      >
+                        {copiedSnapshotId === snapshot.id ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+
+                {snapshots.some(s => s.type === "Delta") && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      View-only (last 20% before compaction)
+                    </p>
+                    {snapshots
+                      .filter(s => s.type === "Delta")
+                      .map((snapshot) => (
+                        <div
+                          key={snapshot.id}
+                          className="flex items-center justify-between p-2 text-xs text-muted-foreground"
+                        >
+                          <span>Cycle #{snapshot.compactionCycle} delta</span>
+                          <span>{(snapshot.sizeBytes / 1024).toFixed(1)} KB</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>How to resume from a checkpoint:</strong>
+                  </p>
+                  <ol className="text-xs text-muted-foreground mt-2 space-y-1 list-decimal list-inside">
+                    <li>Copy the resume command for your chosen checkpoint</li>
+                    <li>Run it in your terminal on any machine</li>
+                    <li>Then run: <code className="bg-muted px-1 rounded">claude --continue</code></li>
+                  </ol>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

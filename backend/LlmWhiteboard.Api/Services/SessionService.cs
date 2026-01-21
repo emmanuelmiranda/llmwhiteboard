@@ -365,4 +365,12 @@ public class SessionService : ISessionService
             .ThenBy(s => s.Type)
             .ToListAsync();
     }
+
+    public async Task<TranscriptSnapshot?> GetSnapshotByIdAsync(string snapshotId, string userId)
+    {
+        return await _db.TranscriptSnapshots
+            .Include(s => s.Session)
+                .ThenInclude(s => s.Machine)
+            .FirstOrDefaultAsync(s => s.Id == snapshotId && s.Session.UserId == userId);
+    }
 }

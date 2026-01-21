@@ -3,13 +3,14 @@ import path from "path";
 import os from "os";
 import chalk from "chalk";
 import inquirer from "inquirer";
-import { downloadTranscript, listSessions, type Session } from "../lib/api.js";
+import { downloadTranscript, downloadSnapshot, listSessions, type Session } from "../lib/api.js";
 import { readConfig, readEncryptionKey } from "../lib/config.js";
 import { decrypt, computeChecksum } from "../lib/crypto.js";
 
 interface ResumeOptions {
   search?: string;
   latest?: boolean;
+  snapshot?: string;
 }
 
 export async function resumeCommand(
@@ -66,14 +67,19 @@ export async function resumeCommand(
       }
     }
 
-    if (!targetSessionId) {
-      console.error(chalk.red("Please provide a session ID, use --search, or --latest"));
+    if (!targetSessionId && !options.snapshot) {
+      console.error(chalk.red("Please provide a session ID, use --search, --latest, or --snapshot"));
       process.exit(1);
     }
 
-    console.log(chalk.dim(`→ Fetching transcript from API: GET /api/sync/transcript/${targetSessionId}`));
-
-    const transcript = await downloadTranscript(targetSessionId);
+    let transcript;
+    if (options.snapshot) {
+      console.log(chalk.dim(`→ Fetching snapshot from API: GET /api/sync/snapshot/${options.snapshot}`));
+      transcript = await downloadSnapshot(options.snapshot);
+    } else {
+      console.log(chalk.dim(`→ Fetching transcript from API: GET /api/sync/transcript/${targetSessionId}`));
+      transcript = await downloadTranscript(targetSessionId!);
+    }
 
     console.log(chalk.dim(`→ Received transcript:`));
     console.log(chalk.dim(`    Local Session ID: ${transcript.localSessionId}`));

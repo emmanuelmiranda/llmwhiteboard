@@ -122,4 +122,8 @@ export async function downloadTranscript(sessionId: string): Promise<TranscriptR
   return makeRequest<TranscriptResponse>(`/api/sync/transcript/${sessionId}`);
 }
 
+export async function downloadSnapshot(snapshotId: string): Promise<TranscriptResponse> {
+  return makeRequest<TranscriptResponse>(`/api/sync/snapshot/${snapshotId}`);
+}
+
 export { type Session, type TranscriptResponse };

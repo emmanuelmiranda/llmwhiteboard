@@ -193,6 +193,33 @@ public class SyncController : ControllerBase
     }
 
     /// <summary>
+    /// Download a specific snapshot (CLI)
+    /// </summary>
+    [HttpGet("snapshot/{snapshotId}")]
+    public async Task<ActionResult<TranscriptDownloadResponse>> DownloadSnapshot(string snapshotId)
+    {
+        var userId = GetUserId();
+
+        var snapshot = await _sessionService.GetSnapshotByIdAsync(snapshotId, userId);
+        if (snapshot == null)
+        {
+            return NotFound(new { error = "Snapshot not found" });
+        }
+
+        return Ok(new TranscriptDownloadResponse
+        {
+            SessionId = snapshot.SessionId,
+            LocalSessionId = snapshot.Session.LocalSessionId,
+            ProjectPath = snapshot.Session.ProjectPath,
+            MachineId = snapshot.Session.Machine?.MachineId,
+            Content = Convert.ToBase64String(snapshot.Content),
+            IsEncrypted = snapshot.IsEncrypted,
+            Checksum = snapshot.Checksum,
+            SizeBytes = snapshot.SizeBytes
+        });
+    }
+
+    /// <summary>
     /// List sessions (CLI)
     /// </summary>
     [HttpGet("sessions")]

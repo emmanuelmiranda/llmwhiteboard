@@ -1,6 +1,6 @@
 {
   "name": "llmwhiteboard",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "CLI tool for syncing Claude Code sessions to LLM Whiteboard",
   "bin": {
     "llmwhiteboard": "./dist/index.js"
