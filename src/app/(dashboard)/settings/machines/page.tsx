@@ -8,14 +8,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Monitor } from "lucide-react";
+import { Monitor, Pencil, Check, X } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { apiClient, type Machine } from "@/lib/api-client";
 
 export default function MachinesPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -37,6 +41,31 @@ export default function MachinesPage() {
     fetchMachines();
   }, [toast]);
 
+  const startEditing = (machine: Machine) => {
+    setEditingId(machine.id);
+    setEditName(machine.name || machine.machineId);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      const updated = await apiClient.updateMachine(id, { name: editName || undefined });
+      setMachines(machines.map(m => m.id === id ? { ...m, name: updated.name } : m));
+      setEditingId(null);
+      toast({ title: "Saved", description: "Machine name updated" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -50,7 +79,7 @@ export default function MachinesPage() {
         <CardHeader>
           <CardTitle>Connected Machines</CardTitle>
           <CardDescription>
-            All machines that have synced sessions
+            Click the edit icon to rename a machine
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,9 +103,35 @@ export default function MachinesPage() {
                   <div className="flex items-center space-x-4">
                     <Monitor className="h-8 w-8 text-muted-foreground" />
                     <div className="space-y-1">
-                      <p className="font-medium">
-                        {machine.name || `Machine ${machine.machineId.slice(0, 8)}`}
-                      </p>
+                      {editingId === machine.id ? (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="h-8 w-48"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveEdit(machine.id);
+                              if (e.key === "Escape") cancelEditing();
+                            }}
+                          />
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveEdit(machine.id)}>
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancelEditing}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <p className="font-medium">
+                            {machine.name || machine.machineId}
+                          </p>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditing(machine)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                       <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                         <span>{machine.sessionCount} sessions</span>
                         {machine.lastSeenAt && (

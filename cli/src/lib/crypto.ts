@@ -4,7 +4,7 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
-export function encrypt(data: Buffer, keyHex: string): Buffer {
+export function encrypt(data: Buffer, keyHex: string): Buffer<ArrayBuffer> {
   const key = Buffer.from(keyHex, "hex");
   const iv = crypto.randomBytes(IV_LENGTH);
 
@@ -13,10 +13,10 @@ export function encrypt(data: Buffer, keyHex: string): Buffer {
   const authTag = cipher.getAuthTag();
 
   // Format: IV (16 bytes) + Auth Tag (16 bytes) + Encrypted Data
-  return Buffer.concat([iv, authTag, encrypted]);
+  return Buffer.concat([iv, authTag, encrypted]) as Buffer<ArrayBuffer>;
 }
 
-export function decrypt(encryptedData: Buffer, keyHex: string): Buffer {
+export function decrypt(encryptedData: Buffer, keyHex: string): Buffer<ArrayBuffer> {
   const key = Buffer.from(keyHex, "hex");
 
   const iv = encryptedData.subarray(0, IV_LENGTH);
@@ -26,7 +26,7 @@ export function decrypt(encryptedData: Buffer, keyHex: string): Buffer {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  return Buffer.concat([decipher.update(data), decipher.final()]);
+  return Buffer.concat([decipher.update(data), decipher.final()]) as Buffer<ArrayBuffer>;
 }
 
 export function computeChecksum(data: Buffer): string {

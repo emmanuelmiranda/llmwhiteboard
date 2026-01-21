@@ -1,6 +1,6 @@
 import type { SessionStatus } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:22001";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.llmwhiteboard.com";
 
 interface ApiError {
   error: string;
@@ -104,17 +104,19 @@ class ApiClient {
   }
 
   async getSession(id: string) {
-    return this.request<{ session: SessionDetail }>(`/api/sessions/${id}`);
+    const session = await this.request<SessionDetail>(`/api/sessions/${id}`);
+    return { session };
   }
 
   async updateSession(
     id: string,
     data: { title?: string; description?: string; status?: string; tags?: string[] }
   ) {
-    return this.request<{ session: Session }>(`/api/sessions/${id}`, {
+    const session = await this.request<Session>(`/api/sessions/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });
+    return { session };
   }
 
   async deleteSession(id: string) {
@@ -159,6 +161,13 @@ class ApiClient {
   // Machines
   async getMachines() {
     return this.request<{ machines: Machine[] }>("/api/machines");
+  }
+
+  async updateMachine(id: string, data: { name?: string }) {
+    return this.request<Machine>(`/api/machines/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
 }
 

@@ -40,4 +40,30 @@ public class MachinesController : ControllerBase
             }).ToList()
         });
     }
+
+    [HttpPatch("{id}")]
+    public async Task<ActionResult<MachineDto>> UpdateMachine(string id, [FromBody] MachineUpdateDto update)
+    {
+        var userId = GetUserId();
+        var machine = await _machineService.UpdateMachineNameAsync(id, userId, update.Name);
+
+        if (machine == null)
+        {
+            return NotFound(new { error = "Machine not found" });
+        }
+
+        return Ok(new MachineDto
+        {
+            Id = machine.Id,
+            MachineId = machine.MachineId,
+            Name = machine.Name,
+            LastSeenAt = machine.LastSeenAt,
+            SessionCount = machine.Sessions?.Count ?? 0
+        });
+    }
+}
+
+public class MachineUpdateDto
+{
+    public string? Name { get; set; }
 }

@@ -33,7 +33,7 @@ services:
       Jwt__Issuer: LlmWhiteboard
       Jwt__Audience: LlmWhiteboard
       Jwt__ExpiryInDays: 7
-      Frontend__Url: http://localhost:22000
+      Frontend__Url: https://llmwhiteboard.com
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,13 +43,13 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:22001
+        NEXT_PUBLIC_API_URL: https://api.llmwhiteboard.com
     container_name: llmwhiteboard-web
     restart: unless-stopped
     ports:
       - "22000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:22001
+      NEXT_PUBLIC_API_URL: https://api.llmwhiteboard.com
     depends_on:
       - backend
 

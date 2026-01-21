@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
 import { Folder, Activity, GripVertical, Plus, X } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 
 interface WhiteboardSession {
@@ -53,8 +54,7 @@ export default function WhiteboardPage() {
   useEffect(() => {
     const fetchSessions = async () => {
       try {
-        const res = await fetch("/api/sessions?limit=50");
-        const data = await res.json();
+        const data = await apiClient.getSessions({ limit: 50 });
         setSessions(data.sessions || []);
 
         // Load saved groups from localStorage
@@ -62,10 +62,10 @@ export default function WhiteboardPage() {
         if (savedGroups) {
           setGroups(JSON.parse(savedGroups));
         }
-      } catch {
+      } catch (error) {
         toast({
           title: "Error",
-          description: "Failed to load sessions",
+          description: error instanceof Error ? error.message : "Failed to load sessions",
           variant: "destructive",
         });
       } finally {

@@ -3,7 +3,7 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:22000'],
+      allowedOrigins: ['llmwhiteboard.com', 'localhost:22000'],
     },
   },
 };

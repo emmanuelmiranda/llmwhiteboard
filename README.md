@@ -343,8 +343,22 @@ Key environment variables for production (`.env`):
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+By contributing, you agree to the Contributor License Agreement (CLA), which ensures we can continue to offer LLM Whiteboard as both an open-source project and a managed service.
 
 ## License
 
-MIT
+This project is licensed under the **Elastic License 2.0** - see [LICENSE](LICENSE) for details.
+
+**You can:**
+- Use the software for free
+- Self-host for personal or business use
+- Modify the source code
+- Contribute improvements
+
+**You cannot:**
+- Offer LLM Whiteboard as a managed/hosted service to third parties
+- Remove licensing notices
+
+For managed hosting, use [llmwhiteboard.com](https://llmwhiteboard.com).

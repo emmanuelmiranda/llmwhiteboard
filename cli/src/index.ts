@@ -19,8 +19,10 @@ program
   .command("init")
   .description("Initialize LLM Whiteboard and configure Claude Code hooks")
   .option("-t, --token <token>", "API token (or enter interactively)")
-  .option("-u, --url <url>", "API URL (default: https://llmwhiteboard.com)")
+  .option("-u, --url <url>", "API URL (default: https://api.llmwhiteboard.com)")
+  .option("-m, --machine-id <id>", "Machine ID (default: auto-generated)")
   .option("-e, --enable-encryption", "Enable end-to-end encryption")
+  .option("-g, --global", "Install hooks globally (~/.claude/settings.json) instead of project-level")
   .action(initCommand);
 
 program

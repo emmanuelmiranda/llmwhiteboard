@@ -44,6 +44,15 @@ public class SyncController : ControllerBase
             payload.LocalSessionId,
             payload.ProjectPath);
 
+        // Set title from suggested title if session has no title yet
+        if (string.IsNullOrEmpty(session.Title) && !string.IsNullOrEmpty(payload.SuggestedTitle))
+        {
+            await _sessionService.UpdateSessionAsync(session.Id, userId, new SessionUpdateDto
+            {
+                Title = payload.SuggestedTitle
+            });
+        }
+
         // Update session status based on event type
         var eventType = payload.Event.Type.ToLower();
         var statusUpdate = eventType switch

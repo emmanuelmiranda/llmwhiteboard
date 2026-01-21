@@ -21,6 +21,7 @@ import {
   Key,
   Monitor,
   LogOut,
+  HelpCircle,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import type { User } from "@/lib/api-client";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/sessions", label: "Sessions", icon: LayoutDashboard },
   { href: "/timeline", label: "Timeline", icon: Clock },
   { href: "/whiteboard", label: "Whiteboard", icon: Layout },
+  { href: "/help", label: "Help", icon: HelpCircle },
 ];
 
 const settingsItems = [

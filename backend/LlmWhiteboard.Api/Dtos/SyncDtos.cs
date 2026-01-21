@@ -13,6 +13,11 @@ public class SyncPayload
     [Required]
     public string MachineId { get; set; } = null!;
 
+    /// <summary>
+    /// Optional title suggestion from the first user message
+    /// </summary>
+    public string? SuggestedTitle { get; set; }
+
     [Required]
     public SyncEvent Event { get; set; } = null!;
 

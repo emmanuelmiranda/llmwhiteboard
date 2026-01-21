@@ -2,7 +2,6 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import chalk from "chalk";
-import ora from "ora";
 import inquirer from "inquirer";
 import { downloadTranscript, listSessions, type Session } from "../lib/api.js";
 import { readConfig, readEncryptionKey } from "../lib/config.js";
@@ -17,27 +16,27 @@ export async function resumeCommand(
   sessionId?: string,
   options: ResumeOptions = {}
 ): Promise<void> {
+  console.log(chalk.dim(`→ Reading config from ~/.llmwhiteboard/config.json`));
   const config = await readConfig();
   if (!config) {
     console.error(chalk.red("Not configured. Run: npx llmwhiteboard init"));
     process.exit(1);
   }
-
-  const spinner = ora();
+  console.log(chalk.dim(`    API URL: ${config.apiUrl}`));
 
   try {
     let targetSessionId = sessionId;
 
     // If searching or getting latest, find the session first
     if (options.search || options.latest) {
-      spinner.start("Searching for sessions...");
+      console.log(chalk.dim(`→ Searching sessions (query: ${options.search || 'latest'})...`));
 
       const { sessions } = await listSessions({
         search: options.search,
         limit: options.latest ? 1 : 10,
       });
 
-      spinner.stop();
+      console.log(chalk.dim(`→ Found ${sessions.length} session(s)`));
 
       if (sessions.length === 0) {
         console.log(chalk.yellow("\nNo sessions found."));
@@ -46,7 +45,7 @@ export async function resumeCommand(
 
       if (options.latest) {
         targetSessionId = sessions[0].id;
-        console.log(chalk.dim(`\nFound latest session: ${sessions[0].title || sessions[0].localSessionId.slice(0, 8)}`));
+        console.log(chalk.dim(`→ Selected latest session: ${sessions[0].title || sessions[0].localSessionId.slice(0, 8)}`));
       } else {
         // Let user select from search results
         const choices = sessions.map((s: Session) => ({
@@ -72,27 +71,38 @@ export async function resumeCommand(
       process.exit(1);
     }
 
-    spinner.start("Downloading session transcript...");
+    console.log(chalk.dim(`→ Fetching transcript from API: GET /api/sync/transcript/${targetSessionId}`));
 
     const transcript = await downloadTranscript(targetSessionId);
 
+    console.log(chalk.dim(`→ Received transcript:`));
+    console.log(chalk.dim(`    Local Session ID: ${transcript.localSessionId}`));
+    console.log(chalk.dim(`    Project Path: ${transcript.projectPath}`));
+    console.log(chalk.dim(`    Size: ${(transcript.sizeBytes / 1024).toFixed(1)} KB`));
+    console.log(chalk.dim(`    Encrypted: ${transcript.isEncrypted ? 'Yes' : 'No'}`));
+
     // Decode content
+    console.log(chalk.dim(`→ Decoding base64 content...`));
     let content = Buffer.from(transcript.content, "base64");
+    console.log(chalk.dim(`    Decoded size: ${content.length} bytes`));
 
     // Verify checksum
-    if (computeChecksum(content) !== transcript.checksum) {
-      spinner.fail("Checksum verification failed");
-      console.error(chalk.red("The downloaded transcript appears to be corrupted."));
+    console.log(chalk.dim(`→ Verifying checksum...`));
+    const computedChecksum = computeChecksum(content);
+    if (computedChecksum !== transcript.checksum) {
+      console.error(chalk.red(`    Expected: ${transcript.checksum}`));
+      console.error(chalk.red(`    Got: ${computedChecksum}`));
+      console.error(chalk.red("\nThe downloaded transcript appears to be corrupted."));
       process.exit(1);
     }
+    console.log(chalk.dim(`    Checksum verified: ${transcript.checksum.slice(0, 16)}...`));
 
     // Decrypt if necessary
     if (transcript.isEncrypted) {
-      spinner.text = "Decrypting transcript...";
+      console.log(chalk.dim(`→ Session is encrypted, reading encryption key...`));
 
       const encryptionKey = await readEncryptionKey();
       if (!encryptionKey) {
-        spinner.fail("Encryption key not found");
         console.error(
           chalk.red(
             "\nThis session is encrypted but no encryption key was found."
@@ -106,10 +116,11 @@ export async function resumeCommand(
         process.exit(1);
       }
 
+      console.log(chalk.dim(`→ Decrypting transcript...`));
       try {
         content = decrypt(content, encryptionKey);
+        console.log(chalk.dim(`    Decrypted size: ${content.length} bytes`));
       } catch {
-        spinner.fail("Decryption failed");
         console.error(
           chalk.red("\nFailed to decrypt the transcript. Is this the correct key?")
         );
@@ -125,27 +136,27 @@ export async function resumeCommand(
     const sanitizedProjectPath = projectPath.replace(/[:\\]/g, "_").replace(/^_+/, "");
     const targetDir = path.join(claudeProjectsDir, sanitizedProjectPath);
 
-    spinner.text = "Restoring session...";
+    console.log(chalk.dim(`→ Target directory: ${targetDir}`));
 
     // Create directory structure
+    console.log(chalk.dim(`→ Creating directory structure...`));
     await fs.mkdir(targetDir, { recursive: true });
 
     // Write the transcript file
     const transcriptPath = path.join(targetDir, `${transcript.localSessionId}.jsonl`);
+    console.log(chalk.dim(`→ Writing transcript to: ${transcriptPath}`));
     await fs.writeFile(transcriptPath, content);
+    console.log(chalk.dim(`    Written ${content.length} bytes`));
 
-    spinner.succeed("Session restored successfully!");
+    console.log(chalk.green("\n✓ Session restored successfully!"));
 
-    console.log(chalk.green(`\nSession restored to: ${transcriptPath}`));
+    console.log(chalk.white(`\nSession restored to: ${transcriptPath}`));
     console.log(chalk.bold("\nTo resume this session, run:"));
-    console.log(
-      chalk.cyan(
-        `  claude --continue ${transcript.localSessionId} --directory "${projectPath}"`
-      )
-    );
+    console.log(chalk.cyan(`  cd "${projectPath}"`));
+    console.log(chalk.cyan(`  claude --continue ${transcript.localSessionId}`));
   } catch (error) {
-    spinner.fail("Failed to resume session");
-    console.error(chalk.red(`\nError: ${error instanceof Error ? error.message : error}`));
+    console.error(chalk.red(`\n✗ Failed to resume session`));
+    console.error(chalk.red(`  Error: ${error instanceof Error ? error.message : error}`));
     process.exit(1);
   }
 }

@@ -1,6 +1,7 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
 import ora from "ora";
+import path from "path";
 import {
   writeConfig,
   getMachineId,
@@ -8,19 +9,21 @@ import {
   getKeyFingerprint,
   ENCRYPTION_KEY_FILE,
 } from "../lib/config.js";
-import { installHooks } from "../lib/hooks.js";
+import { installHooks, getHooksFilePath } from "../lib/hooks.js";
 
 interface InitOptions {
   token?: string;
   url?: string;
+  machineId?: string;
   enableEncryption?: boolean;
+  global?: boolean;
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
   console.log(chalk.bold("\nWelcome to LLM Whiteboard!\n"));
 
   let token = options.token;
-  let apiUrl = options.url || "http://localhost:22001";
+  let apiUrl = options.url || "https://api.llmwhiteboard.com";
   let enableEncryption = options.enableEncryption || false;
 
   // Get API token
@@ -69,7 +72,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   try {
     // Get or generate machine ID
-    const machineId = await getMachineId();
+    const machineId = options.machineId || await getMachineId();
 
     // Generate encryption key if enabled
     let encryptionConfig;
@@ -103,8 +106,12 @@ export async function initCommand(options: InitOptions): Promise<void> {
     });
 
     // Install Claude Code hooks
-    spinner.text = "Installing Claude Code hooks...";
-    await installHooks();
+    // Default to project-level hooks (current directory), use --global for global
+    const projectPath = options.global ? undefined : process.cwd();
+    const hooksLocation = options.global ? "global (~/.claude/settings.json)" : "project (.claude/settings.local.json)";
+
+    spinner.text = `Installing Claude Code hooks (${hooksLocation})...`;
+    await installHooks(projectPath);
 
     spinner.succeed("LLM Whiteboard configured successfully!");
 
@@ -115,7 +122,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
       console.log(chalk.dim(`Encryption: Enabled`));
     }
 
-    console.log(chalk.dim(`\nYour sessions will appear at: ${apiUrl}/sessions`));
+    console.log(chalk.dim(`\nYour sessions will appear at: https://llmwhiteboard.com/sessions`));
   } catch (error) {
     spinner.fail("Configuration failed");
     console.error(chalk.red(`\nError: ${error instanceof Error ? error.message : error}`));

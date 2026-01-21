@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -80,9 +81,9 @@ const statusLabels: Record<SessionStatus, string> = {
 export default function SessionDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
+  const { id } = params;
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -95,21 +96,15 @@ export default function SessionDetailPage({
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        const res = await fetch(`/api/sessions/${id}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error);
-        }
-
+        const data = await apiClient.getSession(id);
         setSession(data.session);
         setTitle(data.session.title || "");
         setDescription(data.session.description || "");
         setStatus(data.session.status);
-      } catch {
+      } catch (error) {
         toast({
           title: "Error",
-          description: "Failed to load session",
+          description: error instanceof Error ? error.message : "Failed to load session",
           variant: "destructive",
         });
         router.push("/sessions");
@@ -124,28 +119,20 @@ export default function SessionDetailPage({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/sessions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title || null,
-          description: description || null,
-          status,
-        }),
+      await apiClient.updateSession(id, {
+        title: title || undefined,
+        description: description || undefined,
+        status,
       });
-
-      if (!res.ok) {
-        throw new Error("Failed to save");
-      }
 
       toast({
         title: "Saved",
         description: "Session updated successfully",
       });
-    } catch {
+    } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to save session",
+        description: error instanceof Error ? error.message : "Failed to save session",
         variant: "destructive",
       });
     } finally {
@@ -157,23 +144,17 @@ export default function SessionDetailPage({
     if (!confirm("Are you sure you want to delete this session?")) return;
 
     try {
-      const res = await fetch(`/api/sessions/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to delete");
-      }
+      await apiClient.deleteSession(id);
 
       toast({
         title: "Deleted",
         description: "Session deleted successfully",
       });
       router.push("/sessions");
-    } catch {
+    } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to delete session",
+        description: error instanceof Error ? error.message : "Failed to delete session",
         variant: "destructive",
       });
     }

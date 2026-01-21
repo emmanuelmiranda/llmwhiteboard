@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
 import { Activity, Folder, Clock, ArrowRight } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 
 interface TimelineSession {
@@ -45,20 +46,17 @@ export default function TimelinePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [sessionsRes, eventsRes] = await Promise.all([
-          fetch("/api/sessions?limit=20"),
-          fetch("/api/events?limit=50"),
+        const [sessionsData, eventsData] = await Promise.all([
+          apiClient.getSessions({ limit: 20 }),
+          apiClient.getEvents({ limit: 50 }),
         ]);
-
-        const sessionsData = await sessionsRes.json();
-        const eventsData = await eventsRes.json();
 
         setSessions(sessionsData.sessions || []);
         setEvents(eventsData.events || []);
-      } catch {
+      } catch (error) {
         toast({
           title: "Error",
-          description: "Failed to load timeline data",
+          description: error instanceof Error ? error.message : "Failed to load timeline data",
           variant: "destructive",
         });
       } finally {

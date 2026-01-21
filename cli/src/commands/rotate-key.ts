@@ -79,7 +79,7 @@ export async function rotateKeyCommand(): Promise<void> {
       try {
         // Download transcript
         const transcript = await downloadTranscript(session.id);
-        let content = Buffer.from(transcript.content, "base64");
+        let content: Buffer = Buffer.from(transcript.content, "base64");
 
         // Verify checksum
         if (computeChecksum(content) !== transcript.checksum) {
@@ -87,7 +87,7 @@ export async function rotateKeyCommand(): Promise<void> {
         }
 
         // Decrypt with old key
-        content = decrypt(content, oldKey);
+        content = decrypt(content, oldKey) as Buffer;
 
         // Re-encrypt with new key
         const encrypted = encrypt(content, newKey);
@@ -102,9 +102,9 @@ export async function rotateKeyCommand(): Promise<void> {
         );
 
         successCount++;
-      } catch (error) {
+      } catch (err) {
         console.error(
-          chalk.red(`\nFailed to re-encrypt session ${session.id}: ${error}`)
+          chalk.red(`\nFailed to re-encrypt session ${session.id}: ${err instanceof Error ? err.message : err}`)
         );
         errorCount++;
       }

@@ -56,4 +56,18 @@ public class MachineService : IMachineService
             await _db.SaveChangesAsync();
         }
     }
+
+    public async Task<Machine?> UpdateMachineNameAsync(string id, string userId, string? name)
+    {
+        var machine = await _db.Machines
+            .FirstOrDefaultAsync(m => m.Id == id && m.UserId == userId);
+
+        if (machine == null)
+            return null;
+
+        machine.Name = name;
+        await _db.SaveChangesAsync();
+
+        return machine;
+    }
 }

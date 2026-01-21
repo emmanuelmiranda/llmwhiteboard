@@ -42,7 +42,7 @@ services:
       Jwt__Issuer: LlmWhiteboard
       Jwt__Audience: LlmWhiteboard
       Jwt__ExpiryInDays: ${JWT_EXPIRY_DAYS:-7}
-      Frontend__Url: ${FRONTEND_URL:-http://localhost:22000}
+      Frontend__Url: ${FRONTEND_URL:-https://llmwhiteboard.com}
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,8 +50,7 @@ services:
   frontend:
     # UPDATE THIS: Replace 'your-github-username' with your GitHub username/org
     # NOTE: NEXT_PUBLIC_API_URL is baked in at build time. The published image
-    # uses http://localhost:22001 by default. If deploying to a different URL,
-    # rebuild the image with: docker build --build-arg NEXT_PUBLIC_API_URL=https://your-api-url .
+    # uses https://api.llmwhiteboard.com by default.
     image: ghcr.io/your-github-username/llmwhiteboard-frontend:${VERSION:-latest}
     container_name: llmwhiteboard-web
     restart: unless-stopped

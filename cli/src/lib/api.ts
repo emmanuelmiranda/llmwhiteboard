@@ -71,11 +71,11 @@ async function makeRequest<T>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || `HTTP ${response.status}`);
+    const errorBody = await response.json().catch(() => ({ error: "Request failed" })) as { error?: string };
+    throw new Error(errorBody.error || `HTTP ${response.status}`);
   }
 
-  return response.json();
+  return response.json() as Promise<T>;
 }
 
 export async function syncEvent(payload: Omit<SyncPayload, "machineId">): Promise<void> {

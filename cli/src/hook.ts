@@ -11,12 +11,12 @@ import { readConfig, getMachineId, readEncryptionKey } from "./lib/config.js";
 import { encrypt, computeChecksum } from "./lib/crypto.js";
 
 interface HookContext {
-  hook_type: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd";
+  hook_event_name: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd";
   session_id: string;
   cwd: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
-  tool_output?: string;
+  tool_response?: { stdout?: string; stderr?: string };
   message?: string;
   transcript_path?: string;
 }
@@ -54,10 +54,20 @@ async function main() {
       Notification: "message",
     };
 
-    const eventType = eventTypeMap[context.hook_type];
+    const eventType = eventTypeMap[context.hook_event_name];
     if (!eventType) {
       // Ignore hooks we don't care about
       process.exit(0);
+    }
+
+    // Extract suggested title from first user message
+    // Claude Code passes the initial prompt in the message field on SessionStart
+    let suggestedTitle: string | undefined;
+    if (context.hook_event_name === "SessionStart" && context.message) {
+      // Truncate to reasonable length for title
+      suggestedTitle = context.message.length > 100
+        ? context.message.substring(0, 97) + "..."
+        : context.message;
     }
 
     // Build the sync payload
@@ -65,6 +75,7 @@ async function main() {
       localSessionId: context.session_id,
       projectPath: context.cwd,
       machineId,
+      suggestedTitle,
       event: {
         type: eventType,
         toolName: context.tool_name,
@@ -89,17 +100,17 @@ async function main() {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      console.error(`LLM Whiteboard sync failed: ${error.error || response.status}`);
+      const errorBody = await response.json().catch(() => ({})) as { error?: string };
+      console.error(`LLM Whiteboard sync failed: ${errorBody.error || response.status}`);
     }
 
     // On session end, upload the full transcript
-    if (context.hook_type === "SessionEnd" && context.transcript_path) {
+    if (context.hook_event_name === "SessionEnd" && context.transcript_path) {
       await uploadTranscript(config, context, machineId);
     }
-  } catch (error) {
+  } catch (err) {
     // Silently fail to not interrupt Claude Code
-    console.error(`LLM Whiteboard hook error: ${error}`);
+    console.error(`LLM Whiteboard hook error: ${err instanceof Error ? err.message : err}`);
   }
 }
 
@@ -111,14 +122,14 @@ async function uploadTranscript(
   try {
     if (!context.transcript_path) return;
 
-    let content = await fs.readFile(context.transcript_path);
+    let content: Buffer = await fs.readFile(context.transcript_path);
     let isEncrypted = false;
 
     // Encrypt if enabled
     if (config.encryption?.enabled) {
       const key = await readEncryptionKey();
       if (key) {
-        content = encrypt(content, key);
+        content = encrypt(content, key) as Buffer;
         isEncrypted = true;
       }
     }
@@ -141,11 +152,11 @@ async function uploadTranscript(
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      console.error(`LLM Whiteboard transcript upload failed: ${error.error || response.status}`);
+      const errorBody = await response.json().catch(() => ({})) as { error?: string };
+      console.error(`LLM Whiteboard transcript upload failed: ${errorBody.error || response.status}`);
     }
-  } catch (error) {
-    console.error(`LLM Whiteboard transcript upload error: ${error}`);
+  } catch (err) {
+    console.error(`LLM Whiteboard transcript upload error: ${err instanceof Error ? err.message : err}`);
   }
 }
 

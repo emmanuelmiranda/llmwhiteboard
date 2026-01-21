@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { readConfig, readEncryptionKey, getKeyFingerprint } from "../lib/config.js";
-import { areHooksInstalled } from "../lib/hooks.js";
+import { areHooksInstalled, getHooksFilePath } from "../lib/hooks.js";
 
 export async function statusCommand(): Promise<void> {
   console.log(chalk.bold("\nLLM Whiteboard Status\n"));
@@ -34,9 +34,16 @@ export async function statusCommand(): Promise<void> {
 
   console.log();
 
-  const hooksInstalled = await areHooksInstalled();
-  if (hooksInstalled) {
-    console.log(chalk.green("Hooks: Installed"));
+  // Check both project-level and global hooks
+  const projectHooksInstalled = await areHooksInstalled(process.cwd());
+  const globalHooksInstalled = await areHooksInstalled();
+
+  if (projectHooksInstalled) {
+    console.log(chalk.green(`Hooks: Installed (project-level)`));
+    console.log(chalk.dim(`  ${getHooksFilePath(process.cwd())}`));
+  } else if (globalHooksInstalled) {
+    console.log(chalk.green(`Hooks: Installed (global)`));
+    console.log(chalk.dim(`  ${getHooksFilePath()}`));
   } else {
     console.log(chalk.yellow("Hooks: Not installed"));
     console.log(chalk.dim("  Run: npx llmwhiteboard init"));
