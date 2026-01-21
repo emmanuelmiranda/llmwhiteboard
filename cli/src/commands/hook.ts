@@ -47,7 +47,7 @@ function shouldUploadTranscript(lastSyncTime: number, intervalSeconds: number): 
 }
 
 interface HookContext {
-  hook_event_name: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
+  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
   session_id: string;
   cwd: string;
   tool_name?: string;
@@ -56,6 +56,7 @@ interface HookContext {
   message?: string;
   transcript_path?: string;
   trigger?: "manual" | "auto";
+  prompt?: string; // For UserPromptSubmit events
 }
 
 async function readStdin(): Promise<string> {
@@ -189,6 +190,7 @@ export async function hookCommand(): Promise<void> {
     const machineId = await getMachineId();
 
     const eventTypeMap: Record<string, string> = {
+      UserPromptSubmit: "user_prompt",
       SessionStart: "session_start",
       SessionEnd: "session_end",
       PostToolUse: "tool_use",
@@ -208,12 +210,25 @@ export async function hookCommand(): Promise<void> {
     }
 
     let eventSummary: string | undefined;
-    if (context.hook_event_name === "PreCompact") {
+    let eventMetadata: Record<string, unknown> = {};
+
+    if (context.hook_event_name === "UserPromptSubmit") {
+      // Truncate prompt for summary, store full prompt in metadata
+      const prompt = context.prompt || "";
+      eventSummary = prompt.length > 100 ? prompt.substring(0, 97) + "..." : prompt;
+      eventMetadata = { prompt };
+      // Use prompt as suggested title if this is the first message
+      if (!suggestedTitle) {
+        suggestedTitle = eventSummary;
+      }
+    } else if (context.hook_event_name === "PreCompact") {
       eventSummary = context.trigger === "auto"
         ? "Auto-compaction triggered (context full)"
         : "Manual compaction triggered";
+      if (context.trigger) eventMetadata.trigger = context.trigger;
     } else if (context.tool_name) {
       eventSummary = `Used ${context.tool_name}`;
+      if (context.tool_input) eventMetadata.input = context.tool_input;
     } else {
       eventSummary = context.message;
     }
@@ -227,10 +242,7 @@ export async function hookCommand(): Promise<void> {
         type: eventType,
         toolName: context.tool_name,
         summary: eventSummary,
-        metadata: {
-          ...(context.tool_input && { input: context.tool_input }),
-          ...(context.trigger && { trigger: context.trigger }),
-        },
+        metadata: eventMetadata,
       },
       timestamp: new Date().toISOString(),
     };
