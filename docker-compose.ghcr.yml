@@ -8,8 +8,6 @@
 #
 # Update GITHUB_OWNER below to match your GitHub username/organization
 
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -51,13 +49,14 @@ services:
 
   frontend:
     # UPDATE THIS: Replace 'your-github-username' with your GitHub username/org
+    # NOTE: NEXT_PUBLIC_API_URL is baked in at build time. The published image
+    # uses http://localhost:22001 by default. If deploying to a different URL,
+    # rebuild the image with: docker build --build-arg NEXT_PUBLIC_API_URL=https://your-api-url .
     image: ghcr.io/your-github-username/llmwhiteboard-frontend:${VERSION:-latest}
     container_name: llmwhiteboard-web
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-22000}:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:22001}
     depends_on:
       - backend
 

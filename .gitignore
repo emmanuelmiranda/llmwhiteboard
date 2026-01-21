@@ -61,3 +61,6 @@ Thumbs.db
 
 # Production env (use .env.production.example as template)
 .env.production
+
+# Claude Code
+.claude/
