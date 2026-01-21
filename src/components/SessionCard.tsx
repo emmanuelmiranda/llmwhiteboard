@@ -73,17 +73,26 @@ export function SessionCard({ session }: SessionCardProps) {
     <Link href={`/sessions/${session.id}`}>
       <Card className="hover:border-primary/50 transition-colors cursor-pointer">
         <CardHeader className="pb-2">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1 flex-1 min-w-0">
-              <h3 className="font-semibold leading-none truncate">
-                {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
-              </h3>
-              <div className="flex items-center text-sm text-muted-foreground">
-                <Folder className="h-3 w-3 mr-1" />
-                <span className="truncate">{projectName}</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1 flex-1 min-w-0">
+                <h3 className="font-semibold leading-none truncate">
+                  {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
+                </h3>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Folder className="h-3 w-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">{projectName}</span>
+                </div>
               </div>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                  statusColors[session.status] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                }`}
+              >
+                {session.status}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${cliInfo.className}`}
                 title={`Created with ${cliInfo.label}`}
@@ -109,13 +118,6 @@ export function SessionCard({ session }: SessionCardProps) {
               {session.isEncrypted && (
                 <Lock className="h-4 w-4 text-muted-foreground" />
               )}
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  statusColors[session.status] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
-                }`}
-              >
-                {session.status}
-              </span>
             </div>
           </div>
         </CardHeader>

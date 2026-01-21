@@ -78,9 +78,9 @@ export default function SessionsPage() {
           <Button type="submit">Search</Button>
         </form>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[120px] sm:w-[140px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -93,7 +93,7 @@ export default function SessionsPage() {
           </Select>
 
           <Select value={cliFilter} onValueChange={setCliFilter}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[120px] sm:w-[140px]">
               <SelectValue placeholder="CLI Tool" />
             </SelectTrigger>
             <SelectContent>

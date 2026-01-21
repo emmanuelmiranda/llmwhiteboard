@@ -135,7 +135,7 @@ export default function TokensPage() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleCreateToken} className="flex space-x-2">
+            <form onSubmit={handleCreateToken} className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1">
                 <Label htmlFor="tokenName" className="sr-only">
                   Token name
@@ -148,7 +148,7 @@ export default function TokensPage() {
                   disabled={isCreating}
                 />
               </div>
-              <Button type="submit" disabled={isCreating || !newTokenName.trim()}>
+              <Button type="submit" disabled={isCreating || !newTokenName.trim()} className="whitespace-nowrap">
                 <Plus className="h-4 w-4 mr-2" />
                 Create Token
               </Button>
@@ -180,17 +180,17 @@ export default function TokensPage() {
               {tokens.map((token) => (
                 <div
                   key={token.id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex items-start justify-between gap-2 p-4 border rounded-lg"
                 >
-                  <div className="space-y-1">
-                    <p className="font-medium">{token.name}</p>
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                  <div className="space-y-1 min-w-0">
+                    <p className="font-medium truncate">{token.name}</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                       <code>{token.tokenPrefix}...</code>
-                      <span>
+                      <span className="whitespace-nowrap">
                         Created {formatRelativeTime(new Date(token.createdAt))}
                       </span>
                       {token.lastUsedAt && (
-                        <span>
+                        <span className="whitespace-nowrap">
                           Last used {formatRelativeTime(new Date(token.lastUsedAt))}
                         </span>
                       )}
@@ -199,7 +199,7 @@ export default function TokensPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-destructive hover:text-destructive"
+                    className="text-destructive hover:text-destructive flex-shrink-0"
                     onClick={() => handleRevokeToken(token.id)}
                   >
                     <Trash2 className="h-4 w-4" />

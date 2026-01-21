@@ -147,14 +147,14 @@ export default function WhiteboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Whiteboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Whiteboard</h1>
           <p className="text-muted-foreground">
             Organize and group your sessions visually
           </p>
         </div>
-        <Button onClick={addGroup}>
+        <Button onClick={addGroup} className="self-start sm:self-auto">
           <Plus className="h-4 w-4 mr-2" />
           Add Group
         </Button>
@@ -267,21 +267,23 @@ function SessionMiniCard({
         <GripVertical className="h-4 w-4 text-muted-foreground mr-2 mt-0.5 flex-shrink-0" />
       </div>
       <Link href={`/sessions/${session.id}`} className="min-w-0 flex-1" draggable={false}>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <p className="font-medium text-sm truncate">
             {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
           </p>
           <Badge
             variant={statusColors[session.status] || "default"}
-            className="ml-2 text-xs"
+            className="text-xs flex-shrink-0"
           >
             {session.status || "Unknown"}
           </Badge>
         </div>
-        <div className="flex items-center text-xs text-muted-foreground mt-1">
-          <Activity className="h-3 w-3 mr-1" />
-          <span>{session.eventCount} events</span>
-          <span className="mx-1">·</span>
+        <div className="flex items-center text-xs text-muted-foreground mt-1 flex-wrap gap-1">
+          <span className="flex items-center">
+            <Activity className="h-3 w-3 mr-1" />
+            {session.eventCount} events
+          </span>
+          <span>·</span>
           <span>{formatRelativeTime(new Date(session.lastActivityAt))}</span>
         </div>
       </Link>

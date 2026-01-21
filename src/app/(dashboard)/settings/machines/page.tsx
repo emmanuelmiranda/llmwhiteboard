@@ -112,44 +112,46 @@ export default function MachinesPage() {
               {machines.map((machine) => (
                 <div
                   key={machine.id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex items-start justify-between gap-2 p-4 border rounded-lg"
                 >
-                  <div className="flex items-center space-x-4">
-                    <Monitor className="h-8 w-8 text-muted-foreground" />
-                    <div className="space-y-1">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <Monitor className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                    <div className="space-y-1 min-w-0">
                       {editingId === machine.id ? (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Input
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
-                            className="h-8 w-48"
+                            className="h-8 w-full sm:w-48"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") saveEdit(machine.id);
                               if (e.key === "Escape") cancelEditing();
                             }}
                           />
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveEdit(machine.id)}>
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancelEditing}>
-                            <X className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveEdit(machine.id)}>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancelEditing}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-2">
-                          <p className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">
                             {machine.name || machine.machineId}
                           </p>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditing(machine)}>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => startEditing(machine)}>
                             <Pencil className="h-3 w-3" />
                           </Button>
                         </div>
                       )}
-                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                         <span>{machine.sessionCount} sessions</span>
                         {machine.lastSeenAt && (
-                          <span>
+                          <span className="whitespace-nowrap">
                             Last seen {formatRelativeTime(new Date(machine.lastSeenAt))}
                           </span>
                         )}
@@ -160,7 +162,7 @@ export default function MachinesPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
                       onClick={() => deleteMachine(machine.id)}
                       title="Delete machine"
                     >
