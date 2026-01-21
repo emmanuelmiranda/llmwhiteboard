@@ -11,7 +11,7 @@ import { readConfig, getMachineId, readEncryptionKey } from "./lib/config.js";
 import { encrypt, computeChecksum } from "./lib/crypto.js";
 
 interface HookContext {
-  hook_event_name: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd";
+  hook_event_name: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
   session_id: string;
   cwd: string;
   tool_name?: string;
@@ -19,6 +19,7 @@ interface HookContext {
   tool_response?: { stdout?: string; stderr?: string };
   message?: string;
   transcript_path?: string;
+  trigger?: "manual" | "auto"; // For PreCompact events
 }
 
 async function readStdin(): Promise<string> {
@@ -52,6 +53,7 @@ async function main() {
       PostToolUse: "tool_use",
       Stop: "stop",
       Notification: "message",
+      PreCompact: "compaction",
     };
 
     const eventType = eventTypeMap[context.hook_event_name];
@@ -70,6 +72,18 @@ async function main() {
         : context.message;
     }
 
+    // Build event summary based on type
+    let eventSummary: string | undefined;
+    if (context.hook_event_name === "PreCompact") {
+      eventSummary = context.trigger === "auto"
+        ? "Auto-compaction triggered (context full)"
+        : "Manual compaction triggered";
+    } else if (context.tool_name) {
+      eventSummary = `Used ${context.tool_name}`;
+    } else {
+      eventSummary = context.message;
+    }
+
     // Build the sync payload
     const payload = {
       localSessionId: context.session_id,
@@ -79,11 +93,10 @@ async function main() {
       event: {
         type: eventType,
         toolName: context.tool_name,
-        summary: context.tool_name
-          ? `Used ${context.tool_name}`
-          : context.message,
+        summary: eventSummary,
         metadata: {
           ...(context.tool_input && { input: context.tool_input }),
+          ...(context.trigger && { trigger: context.trigger }),
         },
       },
       timestamp: new Date().toISOString(),

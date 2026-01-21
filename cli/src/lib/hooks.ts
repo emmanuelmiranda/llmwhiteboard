@@ -28,6 +28,7 @@ interface ClaudeSettings {
     Stop?: HookEntry[];
     SessionStart?: HookEntry[];
     SessionEnd?: HookEntry[];
+    PreCompact?: HookEntry[];
   };
   [key: string]: unknown;
 }
@@ -88,6 +89,7 @@ export async function installHooks(projectPath?: string): Promise<void> {
     { type: "Stop" as const, matcher: undefined },
     { type: "SessionStart" as const, matcher: undefined },
     { type: "SessionEnd" as const, matcher: undefined },
+    { type: "PreCompact" as const, matcher: undefined },
   ];
 
   for (const { type: hookType, matcher } of hookConfigs) {
@@ -109,7 +111,7 @@ export async function uninstallHooks(projectPath?: string): Promise<void> {
   const settings = await readClaudeSettings(projectPath);
 
   if (settings.hooks) {
-    const hookTypes = ["PostToolUse", "Stop", "SessionStart", "SessionEnd"] as const;
+    const hookTypes = ["PostToolUse", "Stop", "SessionStart", "SessionEnd", "PreCompact"] as const;
     for (const hookType of hookTypes) {
       if (Array.isArray(settings.hooks[hookType])) {
         settings.hooks[hookType] = removeLlmWhiteboardHooks(settings.hooks[hookType]!);
@@ -125,7 +127,7 @@ export async function areHooksInstalled(projectPath?: string): Promise<boolean> 
 
   if (!settings.hooks) return false;
 
-  const hookTypes = ["PostToolUse", "Stop", "SessionStart", "SessionEnd"] as const;
+  const hookTypes = ["PostToolUse", "Stop", "SessionStart", "SessionEnd", "PreCompact"] as const;
 
   for (const hookType of hookTypes) {
     const hooks = settings.hooks[hookType];
