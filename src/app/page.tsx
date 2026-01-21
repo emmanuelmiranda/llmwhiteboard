@@ -63,7 +63,7 @@ export default function LandingPage() {
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
           Visualize, resume, and share your AI-assisted work. Sync your Claude
-          Code sessions across machines and never lose context again.
+          Code and Gemini CLI sessions across machines and never lose context again.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4">
           <Link href="/signup">
@@ -111,8 +111,8 @@ export default function LandingPage() {
             />
             <FeatureCard
               icon={Layout}
-              title="Visual Whiteboard"
-              description="Drag and drop sessions to organize them visually. Group related sessions together."
+              title="Multi-CLI Support"
+              description="Works with Claude Code out of the box. Basic support for Gemini CLI included."
             />
             <FeatureCard
               icon={Zap}

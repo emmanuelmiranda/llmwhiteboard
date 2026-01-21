@@ -2,7 +2,7 @@
 
 > Stop losing track of your LLM sessions. Visualize, resume, and share your AI-assisted work.
 
-A web-based dashboard for visualizing, managing, and resuming Claude Code (and other LLM) sessions across machines.
+A web-based dashboard for visualizing, managing, and resuming Claude Code and Gemini CLI sessions across machines.
 
 ## Architecture
 
@@ -20,10 +20,10 @@ A web-based dashboard for visualizing, managing, and resuming Claude Code (and o
 ## Features
 
 - **Session Dashboard** - View all your Claude Code sessions in one place
-- **Timeline View** - Chronological view of your AI-assisted work
-- **Visual Whiteboard** - Drag and drop to organize sessions
+- **Timeline View** - Chronological view of your AI-assisted work with collapsible event blocks
 - **Cross-Machine Resume** - Start on one machine, resume on another
 - **End-to-End Encryption** - Optional client-side encryption for privacy
+- **Multi-CLI Support** - Works with Claude Code, with basic Gemini CLI support
 - **Multi-threaded Backend** - C# ASP.NET Core for heavy workloads
 
 ## Ports
@@ -46,9 +46,9 @@ Visit `http://localhost:22000` after starting the services.
 npx llmwhiteboard init
 ```
 
-Enter your API token when prompted. This configures Claude Code hooks to sync your sessions automatically.
+Enter your API token when prompted. This configures hooks for installed CLI tools (Claude Code, Gemini CLI) to sync your sessions automatically.
 
-### 3. Start using Claude Code
+### 3. Start coding with your AI assistant
 
 Your sessions will automatically appear in the dashboard.
 
