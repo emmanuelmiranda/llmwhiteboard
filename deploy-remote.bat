@@ -7,7 +7,7 @@ echo ============================================
 echo.
 
 :: Configuration - Update these for your deployment
-set GITHUB_OWNER=your-github-username
+set GITHUB_OWNER=emmanuelmiranda
 set REMOTE_USER=your-ssh-user
 set REMOTE_HOST=your-remote-host
 set REMOTE_PATH=/opt/llmwhiteboard

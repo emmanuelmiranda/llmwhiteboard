@@ -74,7 +74,7 @@ export default function LandingPage() {
           </Link>
           <Button variant="outline" size="lg" asChild>
             <a
-              href="https://github.com/llmwhiteboard/llmwhiteboard"
+              href="https://github.com/emmanuelmiranda/llmwhiteboard"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -205,7 +205,7 @@ export default function LandingPage() {
                 "No external dependencies",
               ]}
               cta="View Setup Guide"
-              ctaHref="https://github.com/llmwhiteboard/llmwhiteboard"
+              ctaHref="https://github.com/emmanuelmiranda/llmwhiteboard"
               variant="outline"
             />
           </div>
@@ -225,7 +225,7 @@ export default function LandingPage() {
             </p>
             <div className="flex items-center space-x-4">
               <a
-                href="https://github.com/llmwhiteboard/llmwhiteboard"
+                href="https://github.com/emmanuelmiranda/llmwhiteboard"
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
                 GitHub

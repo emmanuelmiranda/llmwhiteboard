@@ -86,7 +86,7 @@ stop.bat           # Stop all running containers
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/llmwhiteboard/llmwhiteboard.git
+git clone https://github.com/emmanuelmiranda/llmwhiteboard.git
 cd llmwhiteboard
 ```
 
@@ -292,8 +292,7 @@ nano .env  # Edit with your settings
 # Login to GHCR (if images are private)
 echo YOUR_GITHUB_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 
-# Update the docker-compose file with your GitHub username
-# Edit docker-compose.ghcr.yml and replace 'your-github-username'
+# Images are pre-configured to use ghcr.io/emmanuelmiranda/llmwhiteboard-*
 
 # Pull and start containers
 docker-compose -f docker-compose.ghcr.yml pull

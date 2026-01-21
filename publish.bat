@@ -7,7 +7,7 @@ echo ============================================
 echo.
 
 :: Configuration - Update these for your repository
-set GITHUB_OWNER=your-github-username
+set GITHUB_OWNER=emmanuelmiranda
 set REPO_NAME=llmwhiteboard
 set REGISTRY=ghcr.io
 

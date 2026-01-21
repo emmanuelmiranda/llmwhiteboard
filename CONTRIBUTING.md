@@ -16,7 +16,7 @@ When you open your first pull request, the CLA Assistant bot will prompt you to 
 
 ### Reporting Bugs
 
-1. Check if the issue already exists in [GitHub Issues](https://github.com/your-org/llmwhiteboard/issues)
+1. Check if the issue already exists in [GitHub Issues](https://github.com/emmanuelmiranda/llmwhiteboard/issues)
 2. If not, create a new issue with:
    - Clear description of the bug
    - Steps to reproduce
@@ -61,7 +61,7 @@ llmwhiteboard/
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/llmwhiteboard.git
+git clone https://github.com/emmanuelmiranda/llmwhiteboard.git
 cd llmwhiteboard
 
 # Start services
