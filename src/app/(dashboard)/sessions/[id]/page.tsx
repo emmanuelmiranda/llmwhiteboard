@@ -90,8 +90,34 @@ export default function SessionDetailPage({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<SessionStatus>("ACTIVE");
+  // Events pagination
+  const [events, setEvents] = useState<SessionEvent[]>([]);
+  const [eventsTotal, setEventsTotal] = useState(0);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const EVENTS_PAGE_SIZE = 50;
   const router = useRouter();
   const { toast } = useToast();
+
+  const loadEvents = async (offset: number = 0, append: boolean = false) => {
+    setEventsLoading(true);
+    try {
+      const data = await apiClient.getSessionEvents(id, { limit: EVENTS_PAGE_SIZE, offset });
+      if (append) {
+        setEvents(prev => [...prev, ...data.events]);
+      } else {
+        setEvents(data.events);
+      }
+      setEventsTotal(data.total);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load events",
+        variant: "destructive",
+      });
+    } finally {
+      setEventsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -101,6 +127,8 @@ export default function SessionDetailPage({
         setTitle(data.session.title || "");
         setDescription(data.session.description || "");
         setStatus(data.session.status);
+        // Load events separately with pagination
+        await loadEvents(0);
       } catch (error) {
         toast({
           title: "Error",
@@ -267,19 +295,23 @@ export default function SessionDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Recent Events</CardTitle>
+              <CardTitle>Events</CardTitle>
               <CardDescription>
-                Activity from this session
+                {eventsTotal > 0 ? (
+                  <>Showing {events.length} of {eventsTotal} events</>
+                ) : (
+                  "Activity from this session"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {session.events.length === 0 ? (
+              {events.length === 0 && !eventsLoading ? (
                 <p className="text-muted-foreground text-center py-4">
                   No events recorded yet
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {session.events.map((event) => (
+                  {events.map((event) => (
                     <div
                       key={event.id}
                       className="flex items-start space-x-3 text-sm"
@@ -305,6 +337,16 @@ export default function SessionDetailPage({
                       </span>
                     </div>
                   ))}
+                  {events.length < eventsTotal && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => loadEvents(events.length, true)}
+                      disabled={eventsLoading}
+                    >
+                      {eventsLoading ? "Loading..." : `Load More (${eventsTotal - events.length} remaining)`}
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>

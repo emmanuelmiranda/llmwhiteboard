@@ -99,6 +99,36 @@ public class SessionsController : ControllerBase
         return Ok(new { success = true });
     }
 
+    /// <summary>
+    /// Get paginated events for a session
+    /// </summary>
+    [HttpGet("{id}/events")]
+    public async Task<ActionResult<SessionEventsResponse>> GetSessionEvents(
+        string id,
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0)
+    {
+        var userId = GetUserId();
+
+        var (events, total) = await _sessionService.GetSessionEventsAsync(id, userId, limit, offset);
+
+        return Ok(new SessionEventsResponse
+        {
+            Events = events.Select(e => new SessionEventDto
+            {
+                Id = e.Id,
+                SessionId = e.SessionId,
+                EventType = e.EventType,
+                ToolName = e.ToolName,
+                Summary = e.Summary,
+                CreatedAt = e.CreatedAt
+            }).ToList(),
+            Total = total,
+            Limit = limit,
+            Offset = offset
+        });
+    }
+
     private static SessionDto MapToDto(Session session)
     {
         return new SessionDto

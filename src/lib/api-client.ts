@@ -137,6 +137,16 @@ class ApiClient {
     );
   }
 
+  async getSessionEvents(sessionId: string, params?: { limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+
+    return this.request<SessionEventsResponse>(
+      `/api/sessions/${sessionId}/events?${searchParams.toString()}`
+    );
+  }
+
   // Tokens
   async getTokens() {
     return this.request<{ tokens: ApiToken[] }>("/api/tokens");
@@ -218,6 +228,13 @@ interface SessionListResponse {
   offset: number;
 }
 
+interface SessionEventsResponse {
+  events: SessionEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 interface SessionEvent {
   id: string;
   sessionId: string;
@@ -249,6 +266,7 @@ export type {
   Session,
   SessionDetail,
   SessionListResponse,
+  SessionEventsResponse,
   SessionEvent,
   ApiToken,
   Machine,

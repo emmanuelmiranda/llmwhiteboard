@@ -62,15 +62,8 @@ async function main() {
       process.exit(0);
     }
 
-    // Extract suggested title from first user message
-    // Claude Code passes the initial prompt in the message field on SessionStart
+    // suggestedTitle will be extracted from transcript on SessionEnd
     let suggestedTitle: string | undefined;
-    if (context.hook_event_name === "SessionStart" && context.message) {
-      // Truncate to reasonable length for title
-      suggestedTitle = context.message.length > 100
-        ? context.message.substring(0, 97) + "..."
-        : context.message;
-    }
 
     // Build event summary based on type
     let eventSummary: string | undefined;
@@ -127,6 +120,27 @@ async function main() {
   }
 }
 
+function extractFirstUserMessage(transcriptContent: string): string | undefined {
+  try {
+    const lines = transcriptContent.split("\n").filter(line => line.trim());
+    for (const line of lines) {
+      const entry = JSON.parse(line);
+      // Look for human/user message
+      if (entry.type === "human" || entry.role === "human" || entry.role === "user") {
+        const message = entry.message || entry.content || entry.text;
+        if (typeof message === "string" && message.trim()) {
+          // Truncate to reasonable title length
+          const trimmed = message.trim();
+          return trimmed.length > 100 ? trimmed.substring(0, 97) + "..." : trimmed;
+        }
+      }
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+  return undefined;
+}
+
 async function uploadTranscript(
   config: { apiUrl: string; token: string; encryption?: { enabled: boolean } },
   context: HookContext,
@@ -136,7 +150,11 @@ async function uploadTranscript(
     if (!context.transcript_path) return;
 
     let content: Buffer = await fs.readFile(context.transcript_path);
+    const rawContent = content.toString("utf-8");
     let isEncrypted = false;
+
+    // Extract first user message for title (before encryption)
+    const suggestedTitle = extractFirstUserMessage(rawContent);
 
     // Encrypt if enabled
     if (config.encryption?.enabled) {
@@ -161,6 +179,7 @@ async function uploadTranscript(
         content: content.toString("base64"),
         isEncrypted,
         checksum,
+        suggestedTitle,
       }),
     });
 

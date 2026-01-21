@@ -51,7 +51,7 @@ public class SessionService : ISessionService
         return await _db.Sessions
             .Include(s => s.Machine)
             .Include(s => s.Transcript)
-            .Include(s => s.Events.OrderByDescending(e => e.CreatedAt).Take(100))
+            .Include(s => s.Events.OrderByDescending(e => e.CreatedAt).Take(500))
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
     }
 
@@ -166,8 +166,30 @@ public class SessionService : ISessionService
         return await query
             .OrderByDescending(e => e.CreatedAt)
             .Skip(offset)
-            .Take(Math.Min(limit, 100))
+            .Take(Math.Min(limit, 500))
             .ToListAsync();
+    }
+
+    public async Task<(List<SessionEvent> Events, int Total)> GetSessionEventsAsync(string sessionId, string userId, int limit, int offset)
+    {
+        // Verify session belongs to user
+        var session = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        if (session == null)
+        {
+            return (new List<SessionEvent>(), 0);
+        }
+
+        var query = _db.SessionEvents.Where(e => e.SessionId == sessionId);
+
+        var total = await query.CountAsync();
+
+        var events = await query
+            .OrderByDescending(e => e.CreatedAt)
+            .Skip(offset)
+            .Take(limit)
+            .ToListAsync();
+
+        return (events, total);
     }
 
     public async Task UpsertTranscriptAsync(string sessionId, byte[] content, bool isEncrypted, string checksum)

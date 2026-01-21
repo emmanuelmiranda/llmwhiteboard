@@ -56,6 +56,11 @@ public class TranscriptUploadRequest
 
     [Required]
     public string Checksum { get; set; } = null!;
+
+    /// <summary>
+    /// Optional title suggestion extracted from first user message in transcript
+    /// </summary>
+    public string? SuggestedTitle { get; set; }
 }
 
 public class TranscriptUploadResponse

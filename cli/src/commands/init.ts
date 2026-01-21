@@ -16,7 +16,7 @@ interface InitOptions {
   url?: string;
   machineId?: string;
   enableEncryption?: boolean;
-  global?: boolean;
+  project?: boolean;  // Use project-level hooks instead of global
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
@@ -68,11 +68,24 @@ export async function initCommand(options: InitOptions): Promise<void> {
     enableEncryption = encryptionAnswer.enableEncryption;
   }
 
+  // Get machine ID - prompt if not provided via CLI
+  let machineId = options.machineId;
+  if (!machineId) {
+    const defaultMachineId = await getMachineId();
+    const machineAnswer = await inquirer.prompt([
+      {
+        type: "input",
+        name: "machineId",
+        message: "What do you want to call this machine?",
+        default: defaultMachineId,
+      },
+    ]);
+    machineId = machineAnswer.machineId;
+  }
+
   const spinner = ora("Configuring LLM Whiteboard...").start();
 
   try {
-    // Get or generate machine ID
-    const machineId = options.machineId || await getMachineId();
 
     // Generate encryption key if enabled
     let encryptionConfig;
@@ -101,14 +114,14 @@ export async function initCommand(options: InitOptions): Promise<void> {
     await writeConfig({
       token: token!,
       apiUrl,
-      machineId,
+      machineId: machineId!,
       encryption: encryptionConfig,
     });
 
     // Install Claude Code hooks
-    // Default to project-level hooks (current directory), use --global for global
-    const projectPath = options.global ? undefined : process.cwd();
-    const hooksLocation = options.global ? "global (~/.claude/settings.json)" : "project (.claude/settings.local.json)";
+    // Default to global hooks, use --project for project-specific
+    const projectPath = options.project ? process.cwd() : undefined;
+    const hooksLocation = options.project ? "project (.claude/settings.local.json)" : "global (~/.claude/settings.json)";
 
     spinner.text = `Installing Claude Code hooks (${hooksLocation})...`;
     await installHooks(projectPath);

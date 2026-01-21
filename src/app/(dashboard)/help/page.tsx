@@ -88,7 +88,7 @@ export default function HelpPage() {
 
           <div className="space-y-3">
             <p className="font-medium">Step 2: Run the Setup Command</p>
-            <CodeBlock>{`npx llmwhiteboard init --global --token YOUR_TOKEN --machine-id "My-MacBook"`}</CodeBlock>
+            <CodeBlock>{`npx llmwhiteboard init --token YOUR_TOKEN --machine-id "My-MacBook"`}</CodeBlock>
             <p className="text-sm text-muted-foreground">
               This command will:
             </p>
@@ -131,13 +131,13 @@ Options:
   -t, --token <token>       API token (required)
   -m, --machine-id <id>     Machine name (default: auto-generated)
   -u, --url <url>           API URL (default: https://api.llmwhiteboard.com)
-  -g, --global              Install hooks globally (recommended)
+  -p, --project             Install hooks for current project only
   -e, --enable-encryption   Enable end-to-end encryption`}</CodeBlock>
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
             <p className="font-medium">Hook Installation:</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
-              <li><strong>--global</strong>: Installs to <code className="bg-background px-1 rounded">~/.claude/settings.json</code> (works everywhere)</li>
-              <li><strong>Without --global</strong>: Installs to <code className="bg-background px-1 rounded">.claude/settings.local.json</code> (current directory only)</li>
+              <li><strong>Default</strong>: Installs globally to <code className="bg-background px-1 rounded">~/.claude/settings.json</code> (works everywhere)</li>
+              <li><strong>--project</strong>: Installs to <code className="bg-background px-1 rounded">.claude/settings.local.json</code> (current directory only)</li>
             </ul>
           </div>
 

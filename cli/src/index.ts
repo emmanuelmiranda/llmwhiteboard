@@ -22,7 +22,7 @@ program
   .option("-u, --url <url>", "API URL (default: https://api.llmwhiteboard.com)")
   .option("-m, --machine-id <id>", "Machine ID (default: auto-generated)")
   .option("-e, --enable-encryption", "Enable end-to-end encryption")
-  .option("-g, --global", "Install hooks globally (~/.claude/settings.json) instead of project-level")
+  .option("-p, --project", "Install hooks for current project only (default: global)")
   .action(initCommand);
 
 program

@@ -133,6 +133,15 @@ public class SyncController : ControllerBase
             request.IsEncrypted,
             request.Checksum);
 
+        // Update session title if not set and suggested title provided
+        if (string.IsNullOrEmpty(session.Title) && !string.IsNullOrEmpty(request.SuggestedTitle))
+        {
+            await _sessionService.UpdateSessionAsync(session.Id, userId, new SessionUpdateDto
+            {
+                Title = request.SuggestedTitle
+            });
+        }
+
         return Ok(new TranscriptUploadResponse
         {
             Success = true,

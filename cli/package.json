@@ -1,6 +1,6 @@
 {
   "name": "llmwhiteboard",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "CLI tool for syncing Claude Code sessions to LLM Whiteboard",
   "bin": {
     "llmwhiteboard": "./dist/index.js",
@@ -11,18 +11,36 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "claude",
+    "claude-code",
     "llm",
     "ai",
     "cli",
     "session",
-    "sync"
+    "sync",
+    "whiteboard"
   ],
-  "author": "",
-  "license": "MIT",
+  "author": "Emmanuel Miranda-Steiner",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emmanuelmiranda/llmwhiteboard.git",
+    "directory": "cli"
+  },
+  "homepage": "https://llmwhiteboard.com",
+  "bugs": {
+    "url": "https://github.com/emmanuelmiranda/llmwhiteboard/issues"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "commander": "^12.0.0",
     "inquirer": "^9.2.15",

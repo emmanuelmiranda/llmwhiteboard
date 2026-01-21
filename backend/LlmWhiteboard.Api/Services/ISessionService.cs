@@ -12,6 +12,7 @@ public interface ISessionService
     Task<bool> DeleteSessionAsync(string sessionId, string userId);
     Task<SessionEvent> AddEventAsync(string sessionId, string eventType, string? toolName, string? summary, object? metadata);
     Task<List<SessionEvent>> GetEventsAsync(string userId, int limit, int offset, string? sessionId = null);
+    Task<(List<SessionEvent> Events, int Total)> GetSessionEventsAsync(string sessionId, string userId, int limit, int offset);
     Task UpsertTranscriptAsync(string sessionId, byte[] content, bool isEncrypted, string checksum);
     Task<SessionTranscript?> GetTranscriptAsync(string sessionId, string userId);
     Task IncrementCompactionCountAsync(string sessionId, long? tokensUsed = null);
