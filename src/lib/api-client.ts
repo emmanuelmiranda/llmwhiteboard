@@ -248,6 +248,7 @@ interface SessionEvent {
   eventType: string;
   toolName: string | null;
   summary: string | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
 }
 

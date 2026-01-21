@@ -17,9 +17,26 @@ interface InitOptions {
   machineId?: string;
   enableEncryption?: boolean;
   project?: boolean;  // Use project-level hooks instead of global
+  hooksOnly?: boolean;  // Just reinstall hooks, skip config
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
+  // If --hooks-only, just reinstall hooks and exit
+  if (options.hooksOnly) {
+    const spinner = ora("Reinstalling Claude Code hooks...").start();
+    try {
+      const projectPath = options.project ? process.cwd() : undefined;
+      await installHooks(projectPath);
+      spinner.succeed("Hooks reinstalled successfully!");
+      console.log(chalk.dim("\nHooks updated. Restart Claude Code to apply changes."));
+      return;
+    } catch (error) {
+      spinner.fail("Failed to reinstall hooks");
+      console.error(chalk.red(`\nError: ${error instanceof Error ? error.message : error}`));
+      process.exit(1);
+    }
+  }
+
   console.log(chalk.bold("\nWelcome to LLM Whiteboard!\n"));
 
   let token = options.token;

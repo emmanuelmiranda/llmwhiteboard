@@ -86,13 +86,35 @@ public class SyncController : ControllerBase
             await _sessionService.ProcessCompactionAsync(session.Id);
         }
 
+        // Enrich stop events with elapsed time since session start
+        var eventSummary = payload.Event.Summary;
+        var eventMetadata = payload.Event.Metadata;
+        if (eventType == "stop")
+        {
+            var elapsedTime = await _sessionService.GetElapsedTimeSinceStartAsync(session.Id);
+            if (elapsedTime.HasValue)
+            {
+                var elapsed = elapsedTime.Value;
+                var elapsedStr = elapsed.TotalHours >= 1
+                    ? $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m"
+                    : elapsed.TotalMinutes >= 1
+                        ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+                        : $"{elapsed.Seconds}s";
+                eventSummary = $"Session paused after {elapsedStr}";
+                eventMetadata = new Dictionary<string, object>(eventMetadata ?? new Dictionary<string, object>())
+                {
+                    ["elapsedSeconds"] = (int)elapsed.TotalSeconds
+                };
+            }
+        }
+
         // Add event
         await _sessionService.AddEventAsync(
             session.Id,
             payload.Event.Type,
             payload.Event.ToolName,
-            payload.Event.Summary,
-            payload.Event.Metadata);
+            eventSummary,
+            eventMetadata);
 
         return Ok(new SyncResponse
         {

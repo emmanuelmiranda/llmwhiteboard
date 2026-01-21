@@ -6,13 +6,14 @@
  */
 
 import fs from "fs/promises";
+import * as fsSync from "fs";
 import path from "path";
 import os from "os";
 import { readConfig, getMachineId, readEncryptionKey } from "./lib/config.js";
 import { encrypt, computeChecksum } from "./lib/crypto.js";
 
 interface HookContext {
-  hook_event_name: "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
+  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
   session_id: string;
   cwd: string;
   tool_name?: string;
@@ -21,6 +22,7 @@ interface HookContext {
   message?: string;
   transcript_path?: string;
   trigger?: "manual" | "auto"; // For PreCompact events
+  prompt?: string; // For UserPromptSubmit events
 }
 
 async function readStdin(): Promise<string> {
@@ -45,10 +47,23 @@ async function main() {
     }
 
     const context: HookContext = JSON.parse(input);
+
+    // Debug: log all hook payloads to a file to diagnose issues
+    const debugPath = path.join(os.homedir(), "llmwhiteboard-debug.log");
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      event: context.hook_event_name,
+      hasPrompt: !!context.prompt,
+      promptLength: context.prompt?.length || 0,
+      promptPreview: context.prompt?.substring(0, 100) || "(none)",
+      keys: Object.keys(context),
+    };
+    fsSync.appendFileSync(debugPath, JSON.stringify(debugInfo) + "\n");
     const machineId = await getMachineId();
 
     // Map hook type to event type
     const eventTypeMap: Record<string, string> = {
+      UserPromptSubmit: "user_prompt",
       SessionStart: "session_start",
       SessionEnd: "session_end",
       PostToolUse: "tool_use",
@@ -72,12 +87,25 @@ async function main() {
 
     // Build event summary based on type
     let eventSummary: string | undefined;
-    if (context.hook_event_name === "PreCompact") {
+    let eventMetadata: Record<string, unknown> = {};
+
+    if (context.hook_event_name === "UserPromptSubmit") {
+      // Truncate prompt for summary, store full prompt in metadata
+      const prompt = context.prompt || "";
+      eventSummary = prompt.length > 100 ? prompt.substring(0, 97) + "..." : prompt;
+      eventMetadata = { prompt };
+      // Use prompt as suggested title if this is the first message
+      if (!suggestedTitle) {
+        suggestedTitle = eventSummary;
+      }
+    } else if (context.hook_event_name === "PreCompact") {
       eventSummary = context.trigger === "auto"
         ? "Auto-compaction triggered (context full)"
         : "Manual compaction triggered";
+      if (context.trigger) eventMetadata.trigger = context.trigger;
     } else if (context.tool_name) {
       eventSummary = `Used ${context.tool_name}`;
+      if (context.tool_input) eventMetadata.input = context.tool_input;
     } else {
       eventSummary = context.message;
     }
@@ -92,10 +120,7 @@ async function main() {
         type: eventType,
         toolName: context.tool_name,
         summary: eventSummary,
-        metadata: {
-          ...(context.tool_input && { input: context.tool_input }),
-          ...(context.trigger && { trigger: context.trigger }),
-        },
+        metadata: eventMetadata,
       },
       timestamp: new Date().toISOString(),
     };

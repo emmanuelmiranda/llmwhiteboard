@@ -56,6 +56,7 @@ public class SessionEventDto
     public string EventType { get; set; } = null!;
     public string? ToolName { get; set; }
     public string? Summary { get; set; }
+    public object? Metadata { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

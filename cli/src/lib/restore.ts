@@ -16,12 +16,12 @@ export async function restoreTranscript(
   const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
 
   // Create a sanitized project path for storage
-  // Handle Windows paths (C:\foo\bar) and Unix paths (/foo/bar)
-  const sanitizedProjectPath = projectPath
-    .replace(/^([A-Za-z]):/, "$1") // Keep drive letter but remove colon
-    .replace(/[:\\]/g, "_")
-    .replace(/^_+/, "")
-    .replace(/_+$/, "");
+  // Must match Claude Code's format: D:\sources\foo -> D--sources-foo
+  const sanitizedProjectPath = projectPath.split("").map(c => {
+    const code = c.charCodeAt(0);
+    if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
+    return c;
+  }).join("").replace(/^-+/, "");
 
   const targetDir = path.join(claudeProjectsDir, sanitizedProjectPath);
 
@@ -45,11 +45,12 @@ export async function findExistingTranscript(
 ): Promise<string | null> {
   const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
 
-  const sanitizedProjectPath = projectPath
-    .replace(/^([A-Za-z]):/, "$1")
-    .replace(/[:\\]/g, "_")
-    .replace(/^_+/, "")
-    .replace(/_+$/, "");
+  // Must match Claude Code's format: D:\sources\foo -> D--sources-foo
+  const sanitizedProjectPath = projectPath.split("").map(c => {
+    const code = c.charCodeAt(0);
+    if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
+    return c;
+  }).join("").replace(/^-+/, "");
 
   const transcriptPath = path.join(
     claudeProjectsDir,

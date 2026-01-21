@@ -29,6 +29,7 @@ program
   .option("-m, --machine-id <id>", "Machine ID (default: auto-generated)")
   .option("-e, --enable-encryption", "Enable end-to-end encryption")
   .option("-p, --project", "Install hooks for current project only (default: global)")
+  .option("--hooks-only", "Just reinstall hooks without reconfiguring")
   .action(initCommand);
 
 program

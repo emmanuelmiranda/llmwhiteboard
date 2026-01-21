@@ -134,12 +134,27 @@ export async function resumeCommand(
       }
     }
 
-    // Determine the target directory
-    const projectPath = transcript.projectPath;
+    // Determine the target directory based on CURRENT working directory
+    // Claude Code looks for sessions based on cwd, not original project path
+    const cwd = process.cwd();
+    const originalProjectPath = transcript.projectPath;
     const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
 
+    // Warn if resuming to a different path than original
+    if (path.basename(cwd) !== path.basename(originalProjectPath)) {
+      console.log(chalk.yellow(`⚠ Original project: ${originalProjectPath}`));
+      console.log(chalk.yellow(`  Current directory: ${cwd}`));
+    }
+
     // Create a sanitized project path for storage
-    const sanitizedProjectPath = projectPath.replace(/[:\\]/g, "_").replace(/^_+/, "");
+    // Must match Claude Code's format exactly:
+    // - /Users/foo -> -Users-foo (Unix, keeps leading dash)
+    // - D:\sources\foo -> D--sources-foo (Windows, no leading dash)
+    const sanitizedProjectPath = cwd.split("").map(c => {
+      const code = c.charCodeAt(0);
+      if (code === 58 || code === 92 || code === 47) return "-"; // : \ /
+      return c;
+    }).join("");
     const targetDir = path.join(claudeProjectsDir, sanitizedProjectPath);
 
     console.log(chalk.dim(`→ Target directory: ${targetDir}`));
@@ -158,8 +173,7 @@ export async function resumeCommand(
 
     console.log(chalk.white(`\nSession restored to: ${transcriptPath}`));
     console.log(chalk.bold("\nTo resume this session, run:"));
-    console.log(chalk.cyan(`  cd "${projectPath}"`));
-    console.log(chalk.cyan(`  claude --continue ${transcript.localSessionId}`));
+    console.log(chalk.cyan(`  claude --resume ${transcript.localSessionId}`));
   } catch (error) {
     console.error(chalk.red(`\n✗ Failed to resume session`));
     console.error(chalk.red(`  Error: ${error instanceof Error ? error.message : error}`));

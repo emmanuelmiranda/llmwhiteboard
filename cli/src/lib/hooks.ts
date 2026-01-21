@@ -22,6 +22,7 @@ interface HookEntry {
 
 interface ClaudeSettings {
   hooks?: {
+    UserPromptSubmit?: HookEntry[];
     PreToolUse?: HookEntry[];
     PostToolUse?: HookEntry[];
     Notification?: HookEntry[];
@@ -85,6 +86,7 @@ export async function installHooks(projectPath?: string): Promise<void> {
 
   // PostToolUse needs a matcher, others don't
   const hookConfigs = [
+    { type: "UserPromptSubmit" as const, matcher: undefined },
     { type: "PostToolUse" as const, matcher: "*" },
     { type: "Stop" as const, matcher: undefined },
     { type: "SessionStart" as const, matcher: undefined },
@@ -111,7 +113,7 @@ export async function uninstallHooks(projectPath?: string): Promise<void> {
   const settings = await readClaudeSettings(projectPath);
 
   if (settings.hooks) {
-    const hookTypes = ["PostToolUse", "Stop", "SessionStart", "SessionEnd", "PreCompact"] as const;
+    const hookTypes = ["UserPromptSubmit", "PostToolUse", "Stop", "SessionStart", "SessionEnd", "PreCompact"] as const;
     for (const hookType of hookTypes) {
       if (Array.isArray(settings.hooks[hookType])) {
         settings.hooks[hookType] = removeLlmWhiteboardHooks(settings.hooks[hookType]!);
@@ -127,7 +129,7 @@ export async function areHooksInstalled(projectPath?: string): Promise<boolean> 
 
   if (!settings.hooks) return false;
 
-  const hookTypes = ["PostToolUse", "Stop", "SessionStart", "SessionEnd", "PreCompact"] as const;
+  const hookTypes = ["UserPromptSubmit", "PostToolUse", "Stop", "SessionStart", "SessionEnd", "PreCompact"] as const;
 
   for (const hookType of hookTypes) {
     const hooks = settings.hooks[hookType];

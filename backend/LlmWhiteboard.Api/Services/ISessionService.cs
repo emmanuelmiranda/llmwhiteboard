@@ -16,6 +16,7 @@ public interface ISessionService
     Task UpsertTranscriptAsync(string sessionId, byte[] content, bool isEncrypted, string checksum);
     Task<SessionTranscript?> GetTranscriptAsync(string sessionId, string userId);
     Task IncrementCompactionCountAsync(string sessionId, long? tokensUsed = null);
+    Task<TimeSpan?> GetElapsedTimeSinceStartAsync(string sessionId);
 
     // Snapshot methods
     Task SavePeriodicSnapshotAsync(string sessionId, byte[] content, bool isEncrypted, string checksum);

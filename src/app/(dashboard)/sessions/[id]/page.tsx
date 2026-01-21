@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,13 @@ import {
   History,
   GitBranch,
   Check,
+  MessageSquare,
+  Wrench,
+  Square,
+  Play,
+  ChevronRight,
+  ChevronDown,
+  Zap,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import type { SessionStatus } from "@/types";
@@ -45,6 +52,7 @@ interface SessionEvent {
   eventType: string;
   toolName: string | null;
   summary: string | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -94,9 +102,9 @@ const statusLabels: Record<SessionStatus, string> = {
 export default function SessionDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
+  const { id } = params;
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -112,6 +120,8 @@ export default function SessionDetailPage({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [copiedSnapshotId, setCopiedSnapshotId] = useState<string | null>(null);
+  // Expanded session blocks (by session_start event id)
+  const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
   const router = useRouter();
   const { toast } = useToast();
 
@@ -377,33 +387,204 @@ export default function SessionDetailPage({
                   No events recorded yet
                 </p>
               ) : (
-                <div className="space-y-4">
-                  {events.map((event) => (
-                    <div
-                      key={event.id}
-                      className="flex items-start space-x-3 text-sm"
-                    >
-                      <Activity className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline">{event.eventType}</Badge>
-                          {event.toolName && (
-                            <span className="text-muted-foreground">
-                              {event.toolName}
-                            </span>
+                <div className="space-y-2">
+                  {(() => {
+                    // Group events into session blocks and compaction events
+                    type BlockType =
+                      | { type: "session"; startEvent: SessionEvent; events: SessionEvent[]; stopEvent?: SessionEvent }
+                      | { type: "compaction"; event: SessionEvent };
+
+                    const blocks: BlockType[] = [];
+                    let currentBlock: { type: "session"; startEvent: SessionEvent; events: SessionEvent[]; stopEvent?: SessionEvent } | null = null;
+
+                    // Events are in reverse chronological order, so process accordingly
+                    const reversedEvents = [...events].reverse();
+
+                    for (const event of reversedEvents) {
+                      if (event.eventType === "compaction") {
+                        // Compaction is always its own block
+                        if (currentBlock) {
+                          blocks.push(currentBlock);
+                          currentBlock = null;
+                        }
+                        blocks.push({ type: "compaction", event });
+                      } else if (event.eventType === "session_start") {
+                        if (currentBlock) {
+                          blocks.push(currentBlock);
+                        }
+                        currentBlock = { type: "session", startEvent: event, events: [] };
+                      } else if (event.eventType === "stop" || event.eventType === "session_end") {
+                        if (currentBlock) {
+                          currentBlock.stopEvent = event;
+                          blocks.push(currentBlock);
+                          currentBlock = null;
+                        } else {
+                          // Orphan stop event
+                          blocks.push({ type: "session", startEvent: event, events: [], stopEvent: event });
+                        }
+                      } else if (currentBlock) {
+                        currentBlock.events.push(event);
+                      } else {
+                        // Events before any session_start - create implicit block
+                        currentBlock = { type: "session", startEvent: event, events: [event] };
+                      }
+                    }
+                    if (currentBlock) {
+                      blocks.push(currentBlock);
+                    }
+
+                    // Reverse to show newest first
+                    blocks.reverse();
+
+                    return blocks.map((block, blockIndex) => {
+                      // Render compaction blocks separately
+                      if (block.type === "compaction") {
+                        return (
+                          <div
+                            key={block.event.id}
+                            className="border border-amber-300 dark:border-amber-700 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <Zap className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                              <div className="flex-1">
+                                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                                  Context Compaction
+                                </span>
+                                {block.event.summary && (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                                    {block.event.summary}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                                {formatRelativeTime(new Date(block.event.createdAt))}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Render session blocks
+                      const blockId = block.startEvent.id;
+                      const isExpanded = expandedBlocks.has(blockId);
+                      const promptCount = block.events.filter(e => e.eventType === "user_prompt").length;
+                      const toolCount = block.events.filter(e => e.eventType === "tool_use").length;
+                      const startTime = new Date(block.startEvent.createdAt);
+
+                      const toggleBlock = () => {
+                        setExpandedBlocks(prev => {
+                          const next = new Set(prev);
+                          if (next.has(blockId)) {
+                            next.delete(blockId);
+                          } else {
+                            next.add(blockId);
+                          }
+                          return next;
+                        });
+                      };
+
+                      return (
+                        <div key={blockId} className="border rounded-lg overflow-hidden">
+                          <button
+                            onClick={toggleBlock}
+                            className="w-full flex items-center space-x-3 p-3 hover:bg-muted/50 transition-colors text-left"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            )}
+                            <Play className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2 flex-wrap gap-1">
+                                <span className="text-sm font-medium">
+                                  {formatRelativeTime(startTime)}
+                                </span>
+                                {promptCount > 0 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {promptCount} prompt{promptCount !== 1 ? "s" : ""}
+                                  </Badge>
+                                )}
+                                {toolCount > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {toolCount} tool{toolCount !== 1 ? "s" : ""}
+                                  </Badge>
+                                )}
+                              </div>
+                              {block.stopEvent?.summary && (
+                                <p className="text-xs text-muted-foreground mt-1 truncate">
+                                  {block.stopEvent.summary}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
+                              {block.events.map((event) => {
+                                const isUserPrompt = event.eventType === "user_prompt";
+                                const isToolUse = event.eventType === "tool_use";
+
+                                const EventIcon = isUserPrompt
+                                  ? MessageSquare
+                                  : isToolUse
+                                  ? Wrench
+                                  : Activity;
+
+                                const iconColor = isUserPrompt
+                                  ? "text-blue-500"
+                                  : isToolUse
+                                  ? "text-orange-500"
+                                  : "text-muted-foreground";
+
+                                return (
+                                  <div
+                                    key={event.id}
+                                    className={`flex items-start space-x-3 text-sm ${
+                                      isUserPrompt ? "bg-blue-50 dark:bg-blue-950/30 -mx-1 px-2 py-2 rounded-md" : ""
+                                    }`}
+                                  >
+                                    <EventIcon className={`h-4 w-4 mt-0.5 ${iconColor} flex-shrink-0`} />
+                                    <div className="flex-1 min-w-0">
+                                      {isUserPrompt ? (
+                                        <p className="text-foreground">
+                                          {event.summary || "User prompt"}
+                                        </p>
+                                      ) : (
+                                        <>
+                                          <Badge variant="outline" className="text-xs">
+                                            {event.toolName || event.eventType}
+                                          </Badge>
+                                          {event.summary && (
+                                            <p className="text-muted-foreground mt-1 truncate">
+                                              {event.summary}
+                                            </p>
+                                          )}
+                                          {isToolUse && event.metadata?.input && (
+                                            <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-32 overflow-y-auto">
+                                              {JSON.stringify(event.metadata.input, null, 2)}
+                                            </pre>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                      {formatRelativeTime(new Date(event.createdAt))}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {block.events.length === 0 && (
+                                <p className="text-sm text-muted-foreground text-center py-2">
+                                  No events in this session block
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {event.summary && (
-                          <p className="text-muted-foreground mt-1 truncate">
-                            {event.summary}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatRelativeTime(new Date(event.createdAt))}
-                      </span>
-                    </div>
-                  ))}
+                      );
+                    });
+                  })()}
                   {events.length < eventsTotal && (
                     <Button
                       variant="outline"

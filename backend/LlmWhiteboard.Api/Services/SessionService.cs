@@ -243,6 +243,25 @@ public class SessionService : ISessionService
         await _db.SaveChangesAsync();
     }
 
+    public async Task<TimeSpan?> GetElapsedTimeSinceStartAsync(string sessionId)
+    {
+        // Find the most recent session_start event
+        var sessionStartEvent = await _db.SessionEvents
+            .Where(e => e.SessionId == sessionId && e.EventType == "session_start")
+            .OrderByDescending(e => e.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (sessionStartEvent == null)
+        {
+            // Fall back to session creation time
+            var session = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+            if (session == null) return null;
+            return DateTime.UtcNow - session.CreatedAt;
+        }
+
+        return DateTime.UtcNow - sessionStartEvent.CreatedAt;
+    }
+
     public async Task SavePeriodicSnapshotAsync(string sessionId, byte[] content, bool isEncrypted, string checksum)
     {
         var session = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId);

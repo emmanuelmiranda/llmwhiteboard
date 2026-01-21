@@ -40,6 +40,7 @@ public class EventsController : ControllerBase
                 EventType = e.EventType,
                 ToolName = e.ToolName,
                 Summary = e.Summary,
+                Metadata = e.Metadata != null ? System.Text.Json.JsonSerializer.Deserialize<object>(e.Metadata.RootElement.GetRawText()) : null,
                 CreatedAt = e.CreatedAt
             }).ToList()
         });
