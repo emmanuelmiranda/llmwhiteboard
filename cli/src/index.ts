@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { createRequire } from "module";
 import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
 import { resumeCommand } from "./commands/resume.js";
@@ -8,12 +9,15 @@ import { statusCommand } from "./commands/status.js";
 import { logoutCommand } from "./commands/logout.js";
 import { rotateKeyCommand } from "./commands/rotate-key.js";
 
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json");
+
 const program = new Command();
 
 program
   .name("llmwhiteboard")
   .description("CLI tool for syncing Claude Code sessions to LLM Whiteboard")
-  .version("0.1.0");
+  .version(packageJson.version);
 
 program
   .command("init")

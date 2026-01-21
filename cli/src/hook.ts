@@ -7,6 +7,7 @@
 
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
 import { readConfig, getMachineId, readEncryptionKey } from "./lib/config.js";
 import { encrypt, computeChecksum } from "./lib/crypto.js";
 
@@ -62,8 +63,12 @@ async function main() {
       process.exit(0);
     }
 
-    // suggestedTitle will be extracted from transcript on SessionEnd
+    // Try to extract title from transcript for early events (PostToolUse, Stop)
+    // This gets the title as soon as the user types their first message
     let suggestedTitle: string | undefined;
+    if (context.hook_event_name === "PostToolUse" || context.hook_event_name === "Stop") {
+      suggestedTitle = await tryReadTranscriptTitle(context.cwd, context.session_id);
+    }
 
     // Build event summary based on type
     let eventSummary: string | undefined;
@@ -124,21 +129,42 @@ function extractFirstUserMessage(transcriptContent: string): string | undefined 
   try {
     const lines = transcriptContent.split("\n").filter(line => line.trim());
     for (const line of lines) {
-      const entry = JSON.parse(line);
-      // Look for human/user message
-      if (entry.type === "human" || entry.role === "human" || entry.role === "user") {
-        const message = entry.message || entry.content || entry.text;
-        if (typeof message === "string" && message.trim()) {
-          // Truncate to reasonable title length
-          const trimmed = message.trim();
-          return trimmed.length > 100 ? trimmed.substring(0, 97) + "..." : trimmed;
+      try {
+        const entry = JSON.parse(line);
+        // Claude Code format: type === "user" with message.content
+        if (entry.type === "user" && entry.message?.content) {
+          const content = entry.message.content;
+          if (typeof content === "string" && content.trim()) {
+            const trimmed = content.trim();
+            return trimmed.length > 100 ? trimmed.substring(0, 97) + "..." : trimmed;
+          }
         }
+      } catch {
+        // Skip malformed lines
       }
     }
   } catch {
     // Ignore parsing errors
   }
   return undefined;
+}
+
+function getTranscriptPath(cwd: string, sessionId: string): string {
+  // Claude stores transcripts at ~/.claude/projects/<project-folder>/<session-id>.jsonl
+  // Project folder is cwd with path separators replaced: D:\sources\foo -> D--sources-foo
+  const projectFolder = cwd.replace(/[:\\\/]/g, "-").replace(/^-+/, "");
+  return path.join(os.homedir(), ".claude", "projects", projectFolder, `${sessionId}.jsonl`);
+}
+
+async function tryReadTranscriptTitle(cwd: string, sessionId: string): Promise<string | undefined> {
+  try {
+    const transcriptPath = getTranscriptPath(cwd, sessionId);
+    const content = await fs.readFile(transcriptPath, "utf-8");
+    return extractFirstUserMessage(content);
+  } catch {
+    // Transcript may not exist yet or be unreadable
+    return undefined;
+  }
 }
 
 async function uploadTranscript(
