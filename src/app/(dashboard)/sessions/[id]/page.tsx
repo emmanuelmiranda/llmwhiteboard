@@ -725,18 +725,16 @@ export default function SessionDetailPage({
                             ) : (
                               <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             )}
-                            <Play className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            {block.stopEvent && block.events.length === 0 ? (
+                              <Square className="h-4 w-4 text-red-500 flex-shrink-0" />
+                            ) : (
+                              <Play className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2 flex-wrap gap-1">
                                 <span className="text-sm text-muted-foreground whitespace-nowrap">
                                   {formatRelativeTime(startTime)}
                                 </span>
-                                {block.stopEvent && (
-                                  <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                                    <Square className="h-2.5 w-2.5 mr-1" />
-                                    Ended
-                                  </Badge>
-                                )}
                                 {promptCount > 1 && (
                                   <Badge variant="secondary" className="text-xs">
                                     +{promptCount - 1} more
@@ -748,11 +746,15 @@ export default function SessionDetailPage({
                                   </Badge>
                                 )}
                               </div>
-                              {firstPrompt && (
+                              {block.stopEvent && block.events.length === 0 ? (
+                                <p className="text-sm text-foreground mt-1">
+                                  Session ended{block.stopEvent.summary ? ` - ${block.stopEvent.summary}` : ""}
+                                </p>
+                              ) : firstPrompt ? (
                                 <p className="text-sm text-foreground mt-1">
                                   {firstPrompt.summary || "User prompt"}
                                 </p>
-                              )}
+                              ) : null}
                             </div>
                           </button>
 
