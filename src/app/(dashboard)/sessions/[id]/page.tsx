@@ -731,6 +731,12 @@ export default function SessionDetailPage({
                                 <span className="text-sm text-muted-foreground whitespace-nowrap">
                                   {formatRelativeTime(startTime)}
                                 </span>
+                                {block.stopEvent && (
+                                  <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                    <Square className="h-2.5 w-2.5 mr-1" />
+                                    Ended
+                                  </Badge>
+                                )}
                                 {promptCount > 1 && (
                                   <Badge variant="secondary" className="text-xs">
                                     +{promptCount - 1} more
@@ -805,10 +811,29 @@ export default function SessionDetailPage({
                                   </div>
                                 );
                               })}
-                              {block.events.length === 0 && (
+                              {block.events.length === 0 && !block.stopEvent && (
                                 <p className="text-sm text-muted-foreground text-center py-2">
                                   No events in this session block
                                 </p>
+                              )}
+                              {/* Show stop event at the end */}
+                              {block.stopEvent && (
+                                <div className="flex items-start space-x-3 text-sm bg-gray-50 dark:bg-gray-900/30 -mx-1 px-2 py-2 rounded-md mt-2 border-t pt-3">
+                                  <Square className="h-4 w-4 mt-0.5 text-red-500 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                                      Session ended
+                                    </span>
+                                    {block.stopEvent.summary && (
+                                      <p className="text-muted-foreground mt-0.5">
+                                        {block.stopEvent.summary}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                    {formatRelativeTime(new Date(block.stopEvent.createdAt))}
+                                  </span>
+                                </div>
                               )}
                             </div>
                           )}
