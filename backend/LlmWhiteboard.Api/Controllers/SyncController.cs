@@ -15,11 +15,16 @@ public class SyncController : ControllerBase
 {
     private readonly ISessionService _sessionService;
     private readonly IMachineService _machineService;
+    private readonly ISessionNotificationService _notificationService;
 
-    public SyncController(ISessionService sessionService, IMachineService machineService)
+    public SyncController(
+        ISessionService sessionService,
+        IMachineService machineService,
+        ISessionNotificationService notificationService)
     {
         _sessionService = sessionService;
         _machineService = machineService;
+        _notificationService = notificationService;
     }
 
     private string GetUserId() =>
@@ -38,12 +43,16 @@ public class SyncController : ControllerBase
         var machine = await _machineService.GetOrCreateMachineAsync(userId, payload.MachineId);
 
         // Get or create session
+        var sessionCreatedBefore = DateTime.UtcNow;
         var session = await _sessionService.GetOrCreateSessionAsync(
             userId,
             machine.Id,
             payload.LocalSessionId,
             payload.ProjectPath,
             payload.CliType);
+
+        // Check if this is a newly created session (created within last 5 seconds)
+        var isNewSession = session.CreatedAt >= sessionCreatedBefore.AddSeconds(-5);
 
         // Set title from suggested title if session has no title yet
         if (string.IsNullOrEmpty(session.Title) && !string.IsNullOrEmpty(payload.SuggestedTitle))
@@ -110,18 +119,81 @@ public class SyncController : ControllerBase
         }
 
         // Add event
-        await _sessionService.AddEventAsync(
+        var newEvent = await _sessionService.AddEventAsync(
             session.Id,
             payload.Event.Type,
             payload.Event.ToolName,
             eventSummary,
             eventMetadata);
 
+        // Send real-time notifications
+        // Reload session to get updated data (including event count, last activity)
+        var updatedSession = await _sessionService.GetSessionAsync(session.Id, userId);
+        if (updatedSession != null)
+        {
+            var sessionDto = MapToSessionDto(updatedSession);
+
+            if (isNewSession)
+            {
+                // Notify about new session
+                await _notificationService.NotifySessionCreatedAsync(userId, sessionDto);
+            }
+            else
+            {
+                // Notify about session update (status change, title update, etc.)
+                await _notificationService.NotifySessionUpdatedAsync(userId, session.Id, sessionDto);
+            }
+
+            // Notify about new event
+            var eventDto = new SessionEventDto
+            {
+                Id = newEvent.Id,
+                SessionId = newEvent.SessionId,
+                EventType = newEvent.EventType,
+                ToolName = newEvent.ToolName,
+                Summary = newEvent.Summary,
+                Metadata = newEvent.Metadata != null
+                    ? System.Text.Json.JsonSerializer.Deserialize<object>(newEvent.Metadata.RootElement.GetRawText())
+                    : null,
+                CreatedAt = newEvent.CreatedAt
+            };
+            await _notificationService.NotifyNewEventAsync(userId, session.Id, eventDto);
+        }
+
         return Ok(new SyncResponse
         {
             Success = true,
             SessionId = session.Id
         });
+    }
+
+    private static SessionDto MapToSessionDto(Session session, int? eventCount = null)
+    {
+        return new SessionDto
+        {
+            Id = session.Id,
+            LocalSessionId = session.LocalSessionId,
+            ProjectPath = session.ProjectPath,
+            Title = session.Title,
+            Description = session.Description,
+            Status = session.Status.ToString(),
+            Tags = session.Tags,
+            CliType = session.CliType,
+            Machine = session.Machine != null ? new MachineDto
+            {
+                Id = session.Machine.Id,
+                MachineId = session.Machine.MachineId,
+                Name = session.Machine.Name
+            } : null,
+            HasTranscript = session.Transcript != null,
+            IsEncrypted = session.Transcript?.IsEncrypted ?? false,
+            TranscriptSizeBytes = session.Transcript?.SizeBytes ?? 0,
+            EventCount = eventCount ?? session.Events.Count,
+            CompactionCount = session.CompactionCount,
+            TotalTokensUsed = session.TotalTokensUsed,
+            LastActivityAt = session.LastActivityAt,
+            CreatedAt = session.CreatedAt
+        };
     }
 
     /// <summary>

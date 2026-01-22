@@ -57,3 +57,50 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Real-time update glow animation */
+@keyframes realtime-glow {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.7);
+  }
+  20% {
+    box-shadow: 0 0 20px 4px hsl(var(--primary) / 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+}
+
+.realtime-glow {
+  animation: realtime-glow 2s ease-out;
+}
+
+/* Highlight pulse animation for clicking on stats */
+@keyframes highlight-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  25% {
+    transform: scale(1.02);
+    box-shadow: 0 0 12px 2px currentColor;
+  }
+  50% {
+    transform: scale(1);
+    box-shadow: 0 0 8px 1px currentColor;
+  }
+  75% {
+    transform: scale(1.01);
+    box-shadow: 0 0 10px 2px currentColor;
+  }
+}
+
+.highlight-pulse-waiting {
+  animation: highlight-pulse 2s ease-in-out;
+  color: rgb(251 191 36); /* amber-400 */
+}
+
+.highlight-pulse-working {
+  animation: highlight-pulse 2s ease-in-out;
+  color: rgb(96 165 250); /* blue-400 */
+}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, type SessionEvent as ApiSessionEvent } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -45,9 +45,12 @@ import {
   Zap,
   Sparkles,
   Bot,
+  Download,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import type { SessionStatus } from "@/types";
+import { useSignalRContext } from "@/components/signalr-provider";
+import { ConnectionStatus } from "@/components/connection-status";
 
 interface SessionEvent {
   id: string;
@@ -140,8 +143,29 @@ export default function SessionDetailPage({
   const [copiedSnapshotId, setCopiedSnapshotId] = useState<string | null>(null);
   // Expanded session blocks (by session_start event id)
   const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
+  // Glowing events for real-time updates
+  const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
   const router = useRouter();
   const { toast } = useToast();
+  const {
+    joinSession,
+    leaveSession,
+    onSessionUpdated,
+    onSessionDeleted,
+    onNewEvent,
+  } = useSignalRContext();
+
+  // Add glow effect to an event temporarily
+  const addEventGlow = useCallback((id: string) => {
+    setGlowingEventIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setGlowingEventIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 2000);
+  }, []);
 
   const loadEvents = async (offset: number = 0, append: boolean = false) => {
     setEventsLoading(true);
@@ -202,6 +226,75 @@ export default function SessionDetailPage({
     fetchSession();
   }, [id]);
 
+  // Join session group for real-time updates
+  useEffect(() => {
+    joinSession(id);
+    return () => {
+      leaveSession(id);
+    };
+  }, [id, joinSession, leaveSession]);
+
+  // Subscribe to real-time updates for this session
+  useEffect(() => {
+    const unsubscribeUpdated = onSessionUpdated((updatedSession) => {
+      if (updatedSession.id === id) {
+        setSession((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            title: updatedSession.title,
+            description: updatedSession.description,
+            status: updatedSession.status,
+            lastActivityAt: updatedSession.lastActivityAt,
+            compactionCount: updatedSession.compactionCount,
+            totalTokensUsed: updatedSession.totalTokensUsed,
+          };
+        });
+        // Don't update the form fields if the user hasn't touched them
+        // This prevents overwriting user input while they're editing
+      }
+    });
+
+    const unsubscribeDeleted = onSessionDeleted((sessionId) => {
+      if (sessionId === id) {
+        toast({
+          title: "Session Deleted",
+          description: "This session has been deleted",
+        });
+        router.push("/sessions");
+      }
+    });
+
+    const unsubscribeNewEvent = onNewEvent((newEvent: ApiSessionEvent) => {
+      if (newEvent.sessionId === id) {
+        // Prepend new event to the events list
+        setEvents((prev) => {
+          // Check if event already exists
+          if (prev.some((e) => e.id === newEvent.id)) {
+            return prev;
+          }
+          const mappedEvent: SessionEvent = {
+            id: newEvent.id,
+            eventType: newEvent.eventType,
+            toolName: newEvent.toolName,
+            summary: newEvent.summary,
+            metadata: newEvent.metadata as Record<string, unknown> | null,
+            createdAt: newEvent.createdAt,
+          };
+          return [mappedEvent, ...prev];
+        });
+        setEventsTotal((prev) => prev + 1);
+        addEventGlow(newEvent.id);
+      }
+    });
+
+    return () => {
+      unsubscribeUpdated();
+      unsubscribeDeleted();
+      unsubscribeNewEvent();
+    };
+  }, [id, onSessionUpdated, onSessionDeleted, onNewEvent, toast, router, addEventGlow]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -252,6 +345,108 @@ export default function SessionDetailPage({
     toast({
       title: "Copied",
       description: "Resume command copied to clipboard",
+    });
+  };
+
+  const exportAsMarkdown = () => {
+    if (!session) return;
+
+    const lines: string[] = [];
+
+    // Header
+    lines.push(`# ${session.title || `Session ${session.localSessionId.slice(0, 8)}`}`);
+    lines.push("");
+
+    // Metadata
+    lines.push("## Session Info");
+    lines.push("");
+    lines.push(`- **Project**: ${session.projectPath}`);
+    lines.push(`- **Status**: ${session.status}`);
+    lines.push(`- **CLI**: ${session.cliType}`);
+    if (session.machine) {
+      lines.push(`- **Machine**: ${session.machine.name || session.machine.machineId}`);
+    }
+    lines.push(`- **Created**: ${new Date(session.createdAt).toLocaleString()}`);
+    lines.push(`- **Last Activity**: ${new Date(session.lastActivityAt).toLocaleString()}`);
+    if (session.description) {
+      lines.push(`- **Description**: ${session.description}`);
+    }
+    if (session.tags.length > 0) {
+      lines.push(`- **Tags**: ${session.tags.join(", ")}`);
+    }
+    lines.push("");
+
+    // Events
+    lines.push("## Activity Timeline");
+    lines.push("");
+
+    // Sort events by date (oldest first for reading)
+    const sortedEvents = [...events].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    for (const event of sortedEvents) {
+      const time = new Date(event.createdAt).toLocaleTimeString();
+      const date = new Date(event.createdAt).toLocaleDateString();
+
+      if (event.eventType === "user_prompt") {
+        lines.push(`### 💬 User Prompt (${date} ${time})`);
+        lines.push("");
+        if (event.summary) {
+          lines.push(event.summary);
+        }
+      } else if (event.eventType === "tool_use") {
+        lines.push(`### 🔧 ${event.toolName || "Tool"} (${date} ${time})`);
+        lines.push("");
+        if (event.metadata?.input) {
+          const input = event.metadata.input as Record<string, unknown>;
+          // Show relevant input based on tool type
+          if (event.toolName?.toLowerCase() === "bash" && input.command) {
+            lines.push("```bash");
+            lines.push(String(input.command));
+            lines.push("```");
+          } else if (["read", "write", "edit"].includes(event.toolName?.toLowerCase() || "")) {
+            const filePath = input.file_path || input.path;
+            if (filePath) lines.push(`File: \`${filePath}\``);
+          } else if (event.toolName?.toLowerCase() === "grep" && input.pattern) {
+            lines.push(`Pattern: \`${input.pattern}\``);
+          }
+        }
+        if (event.summary) {
+          lines.push("");
+          lines.push(event.summary);
+        }
+      } else if (event.eventType === "stop" || event.eventType === "session_end") {
+        lines.push(`### ⏹️ ${event.eventType === "stop" ? "Stopped" : "Session End"} (${date} ${time})`);
+        if (event.summary) {
+          lines.push("");
+          lines.push(event.summary);
+        }
+      } else {
+        lines.push(`### ${event.eventType} (${date} ${time})`);
+        if (event.summary) {
+          lines.push("");
+          lines.push(event.summary);
+        }
+      }
+      lines.push("");
+    }
+
+    // Create and download file
+    const content = lines.join("\n");
+    const blob = new Blob([content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `session-${session.localSessionId.slice(0, 8)}-${new Date().toISOString().split("T")[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Exported",
+      description: "Session exported as Markdown",
     });
   };
 
@@ -323,10 +518,20 @@ export default function SessionDetailPage({
           </div>
         </div>
         <div className="flex items-center space-x-2 flex-shrink-0">
+          <ConnectionStatus />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={exportAsMarkdown}
+            title="Export as Markdown"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
           <Button
             variant="destructive"
             size="icon"
             onClick={handleDelete}
+            title="Delete session"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -457,10 +662,11 @@ export default function SessionDetailPage({
                     return blocks.map((block, blockIndex) => {
                       // Render compaction blocks separately
                       if (block.type === "compaction") {
+                        const isGlowing = glowingEventIds.has(block.event.id);
                         return (
                           <div
                             key={block.event.id}
-                            className="border border-amber-300 dark:border-amber-700 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3"
+                            className={`border border-amber-300 dark:border-amber-700 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 ${isGlowing ? "realtime-glow" : ""}`}
                           >
                             <div className="flex items-center space-x-3">
                               <Zap className="h-4 w-4 text-amber-500 flex-shrink-0" />
@@ -491,6 +697,11 @@ export default function SessionDetailPage({
                       const startTime = new Date(block.startEvent.createdAt);
                       const firstPrompt = userPrompts[0];
 
+                      // Check if any event in the block is glowing
+                      const hasGlowingEvent = block.events.some(e => glowingEventIds.has(e.id)) ||
+                        glowingEventIds.has(block.startEvent.id) ||
+                        (block.stopEvent && glowingEventIds.has(block.stopEvent.id));
+
                       const toggleBlock = () => {
                         setExpandedBlocks(prev => {
                           const next = new Set(prev);
@@ -504,7 +715,7 @@ export default function SessionDetailPage({
                       };
 
                       return (
-                        <div key={blockId} className="border rounded-lg overflow-hidden">
+                        <div key={blockId} className={`border rounded-lg overflow-hidden ${hasGlowingEvent ? "realtime-glow" : ""}`}>
                           <button
                             onClick={toggleBlock}
                             className="w-full flex items-center space-x-3 p-3 hover:bg-muted/50 transition-colors text-left"

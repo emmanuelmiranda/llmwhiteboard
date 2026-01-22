@@ -1,5 +1,6 @@
 using System.Text;
 using LlmWhiteboard.Api.Data;
+using LlmWhiteboard.Api.Hubs;
 using LlmWhiteboard.Api.Middleware;
 using LlmWhiteboard.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -53,6 +54,10 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IMachineService, MachineService>();
+builder.Services.AddScoped<ISessionNotificationService, SessionNotificationService>();
+
+// SignalR
+builder.Services.AddSignalR();
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");
@@ -68,6 +73,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+
+        // Configure JWT for SignalR WebSocket connections
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                // Read token from query string for WebSocket connections
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -114,6 +137,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<SessionHub>("/hubs/session");
 
 // Apply database schema on startup
 using (var scope = app.Services.CreateScope())

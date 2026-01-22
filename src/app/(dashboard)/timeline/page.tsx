@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
-import { Activity, Folder, Clock, ArrowRight } from "lucide-react";
+import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
+import { useSignalRContext } from "@/components/signalr-provider";
+import { ConnectionStatus } from "@/components/connection-status";
+import { ActivityStats } from "@/components/activity-stats";
 
 interface TimelineSession {
   id: string;
@@ -16,6 +19,11 @@ interface TimelineSession {
   projectPath: string;
   title: string | null;
   status: SessionStatus;
+  machine: {
+    id: string;
+    machineId: string;
+    name: string | null;
+  } | null;
   lastActivityAt: string;
   createdAt: string;
   eventCount: number;
@@ -27,7 +35,72 @@ interface TimelineEvent {
   eventType: string;
   toolName: string | null;
   summary: string | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
+}
+
+// Extract the most useful info from tool metadata for display
+function getToolDisplayInfo(toolName: string | null, metadata: Record<string, unknown> | null): string | null {
+  if (!toolName || !metadata) return null;
+
+  const input = metadata.input as Record<string, unknown> | undefined;
+  if (!input) return null;
+
+  const tool = toolName.toLowerCase();
+
+  // File operations - show the file path/name
+  if (tool === "read" || tool === "write" || tool === "edit" || tool === "notebookedit") {
+    const filePath = (input.file_path || input.path || input.notebook_path) as string | undefined;
+    if (filePath) {
+      // Show just the filename, not full path
+      const fileName = filePath.split(/[/\\]/).pop();
+      return fileName || filePath;
+    }
+  }
+
+  // Search operations - show the pattern
+  if (tool === "grep") {
+    const pattern = input.pattern as string | undefined;
+    if (pattern) {
+      return pattern.length > 50 ? pattern.slice(0, 50) + "..." : pattern;
+    }
+  }
+
+  if (tool === "glob") {
+    const pattern = input.pattern as string | undefined;
+    if (pattern) return pattern;
+  }
+
+  // Bash - show truncated command
+  if (tool === "bash") {
+    const command = input.command as string | undefined;
+    if (command) {
+      const firstLine = command.split("\n")[0];
+      return firstLine.length > 60 ? firstLine.slice(0, 60) + "..." : firstLine;
+    }
+  }
+
+  // Web operations
+  if (tool === "webfetch" || tool === "websearch") {
+    const url = input.url as string | undefined;
+    const query = input.query as string | undefined;
+    if (url) {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return url.slice(0, 40);
+      }
+    }
+    if (query) return query.length > 50 ? query.slice(0, 50) + "..." : query;
+  }
+
+  // Task tool - show description
+  if (tool === "task") {
+    const description = input.description as string | undefined;
+    if (description) return description;
+  }
+
+  return null;
 }
 
 const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "secondary"> = {
@@ -41,31 +114,120 @@ export default function TimelinePage() {
   const [sessions, setSessions] = useState<TimelineSession[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [glowingSessionIds, setGlowingSessionIds] = useState<Set<string>>(new Set());
+  const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
+  const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
+  const [hoveredEventSessionId, setHoveredEventSessionId] = useState<string | null>(null);
   const { toast } = useToast();
+  const {
+    onSessionCreated,
+    onSessionUpdated,
+    onNewEvent,
+    highlightType,
+    hoverHighlightType,
+    getSessionActivityState,
+    updateSessionActivityState,
+  } = useSignalRContext();
+
+  // Wrapper to check session status before returning activity state
+  const getActivityState = useCallback((sessionId: string, status: string) => {
+    if (status !== "Active") return "idle";
+    return getSessionActivityState(sessionId);
+  }, [getSessionActivityState]);
+
+  // Add glow effect to a session temporarily
+  const addSessionGlow = useCallback((id: string) => {
+    setGlowingSessionIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setGlowingSessionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 2000);
+  }, []);
+
+  // Add glow effect to an event temporarily
+  const addEventGlow = useCallback((id: string) => {
+    setGlowingEventIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setGlowingEventIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 2000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [sessionsData, eventsData] = await Promise.all([
+        apiClient.getSessions({ limit: 20 }),
+        apiClient.getEvents({ limit: 50 }),
+      ]);
+
+      setSessions(sessionsData.sessions || []);
+      setEvents(eventsData.events || []);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load timeline data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [sessionsData, eventsData] = await Promise.all([
-          apiClient.getSessions({ limit: 20 }),
-          apiClient.getEvents({ limit: 50 }),
-        ]);
-
-        setSessions(sessionsData.sessions || []);
-        setEvents(eventsData.events || []);
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to load timeline data",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchData();
-  }, [toast]);
+  }, [fetchData]);
+
+  // Subscribe to real-time updates
+  useEffect(() => {
+    const unsubscribeNewEvent = onNewEvent((newEvent) => {
+      // Prepend new event to the timeline
+      setEvents((prev) => {
+        // Check if event already exists
+        if (prev.some((e) => e.id === newEvent.id)) {
+          return prev;
+        }
+        // Keep only the most recent 50 events
+        return [newEvent as TimelineEvent, ...prev].slice(0, 50);
+      });
+      addEventGlow(newEvent.id);
+      // Track activity state
+      updateSessionActivityState(newEvent.sessionId, newEvent.eventType);
+    });
+
+    const unsubscribeCreated = onSessionCreated((newSession) => {
+      setSessions((prev) => {
+        if (prev.some((s) => s.id === newSession.id)) {
+          return prev;
+        }
+        // Keep only the most recent 20 sessions
+        return [newSession as TimelineSession, ...prev].slice(0, 20);
+      });
+      addSessionGlow(newSession.id);
+      // New sessions start as working
+      updateSessionActivityState(newSession.id, "session_start");
+    });
+
+    const unsubscribeUpdated = onSessionUpdated((updatedSession) => {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === updatedSession.id ? (updatedSession as TimelineSession) : s
+        )
+      );
+      addSessionGlow(updatedSession.id);
+    });
+
+    return () => {
+      unsubscribeNewEvent();
+      unsubscribeCreated();
+      unsubscribeUpdated();
+    };
+  }, [onNewEvent, onSessionCreated, onSessionUpdated, addEventGlow, addSessionGlow, updateSessionActivityState]);
 
   // Group events by date
   const groupedEvents = events.reduce(
@@ -95,11 +257,18 @@ export default function TimelinePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Timeline</h1>
-        <p className="text-muted-foreground">
-          A chronological view of your session activity
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Timeline</h1>
+          <p className="text-muted-foreground">
+            A chronological view of your session activity
+          </p>
+        </div>
+        <ConnectionStatus />
+      </div>
+
+      <div className="p-3 rounded-lg border bg-card">
+        <ActivityStats />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -115,34 +284,69 @@ export default function TimelinePage() {
             {sessions.length === 0 ? (
               <p className="text-muted-foreground text-sm">No sessions yet</p>
             ) : (
-              sessions.slice(0, 10).map((session) => (
-                <Link
-                  key={session.id}
-                  href={`/sessions/${session.id}`}
-                  className="block p-3 rounded-lg border hover:border-primary/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate text-sm">
-                        {session.title ||
-                          `Session ${session.localSessionId.slice(0, 8)}`}
-                      </p>
-                      <div className="flex items-center text-xs text-muted-foreground mt-1">
-                        <Folder className="h-3 w-3 mr-1" />
-                        <span className="truncate">
-                          {session.projectPath.split(/[/\\]/).pop()}
+              sessions.slice(0, 10).map((session) => {
+                const activityState = getActivityState(session.id, session.status);
+                const shouldPulse = highlightType && activityState === highlightType;
+                const shouldStatsHover = hoverHighlightType && activityState === hoverHighlightType;
+                const isEventHovered = hoveredEventSessionId === session.id;
+                const isHighlighted = isEventHovered || shouldStatsHover;
+                return (
+                  <Link
+                    key={session.id}
+                    href={`/sessions/${session.id}`}
+                    className={`block p-3 rounded-lg border transition-colors ${
+                      glowingSessionIds.has(session.id) ? "realtime-glow" : ""
+                    } ${activityState === "waiting" && !isHighlighted ? "border-amber-400 dark:border-amber-500" : ""} ${
+                      shouldPulse ? `highlight-pulse-${highlightType}` : ""
+                    } ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30 border-amber-400" : "hover:border-primary/50"}`}
+                    onMouseEnter={() => setHoveredSessionId(session.id)}
+                    onMouseLeave={() => setHoveredSessionId(null)}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-sm break-words">
+                          {session.title ||
+                            `Session ${session.localSessionId.slice(0, 8)}`}
+                        </p>
+                        {activityState === "waiting" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 shrink-0">
+                            <MessageSquareMore className="h-3 w-3 mr-0.5" />
+                            Waiting
+                          </span>
+                        ) : activityState === "working" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
+                            <Loader2 className="h-3 w-3 mr-0.5 animate-spin" />
+                            Working
+                          </span>
+                        ) : (
+                          <Badge variant={statusColors[session.status]} className="text-xs shrink-0">
+                            {session.status}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center text-xs text-muted-foreground flex-wrap gap-x-2">
+                        <span className="flex items-center">
+                          <Folder className="h-3 w-3 mr-1 shrink-0" />
+                          <span className="break-words">
+                            {session.projectPath.split(/[/\\]/).pop()}
+                          </span>
                         </span>
+                        {session.machine && (
+                          <span className="flex items-center">
+                            <Monitor className="h-3 w-3 mr-1 shrink-0" />
+                            <span className="break-words">
+                              {session.machine.name || session.machine.machineId.slice(0, 8)}
+                            </span>
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <Badge variant={statusColors[session.status]} className="ml-2 text-xs">
-                      {session.status}
-                    </Badge>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    {formatRelativeTime(new Date(session.lastActivityAt))}
-                  </div>
-                </Link>
-              ))
+                    <div className="text-xs text-muted-foreground mt-2">
+                      {formatRelativeTime(new Date(session.lastActivityAt))}
+                    </div>
+                  </Link>
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -172,27 +376,55 @@ export default function TimelinePage() {
                         const session = sessions.find(
                           (s) => s.id === event.sessionId
                         );
+                        const sessionActivityState = session ? getActivityState(session.id, session.status) : "idle";
+                        const isSessionHovered = hoveredSessionId === event.sessionId;
+                        const isStatsHovered = hoverHighlightType && sessionActivityState === hoverHighlightType;
+                        const isHighlighted = isSessionHovered || isStatsHovered;
                         return (
-                          <div key={event.id} className="flex items-start pl-8 relative">
-                            <div className="absolute left-0 top-1 h-6 w-6 rounded-full bg-background border-2 border-primary flex items-center justify-center">
+                          <div
+                            key={event.id}
+                            className={`flex items-start pl-8 relative rounded-lg transition-colors duration-200 ${
+                              glowingEventIds.has(event.id) ? "realtime-glow" : ""
+                            } ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30" : ""}`}
+                            onMouseEnter={() => setHoveredEventSessionId(event.sessionId)}
+                            onMouseLeave={() => setHoveredEventSessionId(null)}
+                          >
+                            <div className={`absolute left-0 top-1 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                              isHighlighted ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : "border-primary bg-background"
+                            }`}>
                               <Activity className="h-3 w-3 text-primary" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {event.eventType}
-                                </Badge>
-                                {event.toolName && (
-                                  <span className="text-xs text-muted-foreground">
+                                {event.eventType === "tool_use" && event.toolName ? (
+                                  <Badge variant="outline" className="text-xs">
                                     {event.toolName}
-                                  </span>
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">
+                                    {event.eventType}
+                                  </Badge>
                                 )}
+                                {(() => {
+                                  const toolInfo = getToolDisplayInfo(event.toolName, event.metadata);
+                                  if (toolInfo) {
+                                    return (
+                                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded truncate max-w-[200px]">
+                                        {toolInfo}
+                                      </code>
+                                    );
+                                  }
+                                  // Fall back to summary for non-tool events (like user_prompt)
+                                  if (event.eventType !== "tool_use" && event.summary) {
+                                    return (
+                                      <span className="text-xs text-muted-foreground truncate">
+                                        {event.summary}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
-                              {event.summary && (
-                                <p className="text-sm text-muted-foreground mt-1 truncate">
-                                  {event.summary}
-                                </p>
-                              )}
                               <div className="flex items-center mt-1 text-xs text-muted-foreground">
                                 <span>
                                   {new Date(event.createdAt).toLocaleTimeString()}

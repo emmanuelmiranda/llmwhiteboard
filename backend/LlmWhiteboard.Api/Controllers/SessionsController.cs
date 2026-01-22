@@ -13,10 +13,12 @@ namespace LlmWhiteboard.Api.Controllers;
 public class SessionsController : ControllerBase
 {
     private readonly ISessionService _sessionService;
+    private readonly ISessionNotificationService _notificationService;
 
-    public SessionsController(ISessionService sessionService)
+    public SessionsController(ISessionService sessionService, ISessionNotificationService notificationService)
     {
         _sessionService = sessionService;
+        _notificationService = notificationService;
     }
 
     private string GetUserId() =>
@@ -79,7 +81,12 @@ public class SessionsController : ControllerBase
         try
         {
             var session = await _sessionService.UpdateSessionAsync(id, userId, update);
-            return Ok(MapToDto(session));
+            var sessionDto = MapToDto(session);
+
+            // Notify about session update
+            await _notificationService.NotifySessionUpdatedAsync(userId, id, sessionDto);
+
+            return Ok(sessionDto);
         }
         catch (KeyNotFoundException)
         {
@@ -97,6 +104,9 @@ public class SessionsController : ControllerBase
         {
             return NotFound(new { error = "Session not found" });
         }
+
+        // Notify about session deletion
+        await _notificationService.NotifySessionDeletedAsync(userId, id);
 
         return Ok(new { success = true });
     }

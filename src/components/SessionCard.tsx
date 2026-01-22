@@ -4,8 +4,10 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime, truncate } from "@/lib/utils";
-import { Folder, Activity, Clock, Monitor, Lock, RefreshCw, Sparkles, Bot, FileText } from "lucide-react";
+import { Folder, Activity, Clock, Monitor, Lock, RefreshCw, Sparkles, Bot, FileText, Loader2, MessageSquareMore } from "lucide-react";
 import type { SessionStatus } from "@/types";
+
+export type SessionActivityState = "idle" | "working" | "waiting";
 
 interface SessionCardProps {
   session: {
@@ -31,6 +33,7 @@ interface SessionCardProps {
     lastActivityAt: string;
     createdAt: string;
   };
+  activityState?: SessionActivityState;
 }
 
 const statusColors: Record<SessionStatus, string> = {
@@ -60,7 +63,26 @@ const cliConfig: Record<string, { label: string; icon: typeof Sparkles; classNam
   },
 };
 
-export function SessionCard({ session }: SessionCardProps) {
+const activityConfig: Record<SessionActivityState, { label: string; icon: typeof Loader2; className: string; animate?: boolean }> = {
+  working: {
+    label: "Working",
+    icon: Loader2,
+    className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+    animate: true,
+  },
+  waiting: {
+    label: "Needs input",
+    icon: MessageSquareMore,
+    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 ring-2 ring-amber-400 ring-offset-1",
+  },
+  idle: {
+    label: "Idle",
+    icon: Clock,
+    className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  },
+};
+
+export function SessionCard({ session, activityState }: SessionCardProps) {
   const projectName = session.projectPath.split(/[/\\]/).pop() || session.projectPath;
   const cliInfo = cliConfig[session.cliType] || {
     label: session.cliType,
@@ -68,6 +90,11 @@ export function SessionCard({ session }: SessionCardProps) {
     className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
   };
   const CliIcon = cliInfo.icon;
+
+  // Only show activity state for active sessions
+  const showActivityState = activityState && session.status === "Active";
+  const activityInfo = showActivityState ? activityConfig[activityState] : null;
+  const ActivityIcon = activityInfo?.icon;
 
   return (
     <Link href={`/sessions/${session.id}`}>
@@ -87,13 +114,24 @@ export function SessionCard({ session }: SessionCardProps) {
 
             {/* Badges row - wraps */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  statusColors[session.status] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
-                }`}
-              >
-                {session.status}
-              </span>
+              {activityInfo && ActivityIcon && (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${activityInfo.className}`}
+                  title={activityInfo.label}
+                >
+                  <ActivityIcon className={`h-3 w-3 mr-1 ${activityInfo.animate ? "animate-spin" : ""}`} />
+                  {activityInfo.label}
+                </span>
+              )}
+              {!activityInfo && (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    statusColors[session.status] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                  }`}
+                >
+                  {session.status}
+                </span>
+              )}
               <span
                 className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${cliInfo.className}`}
                 title={`Created with ${cliInfo.label}`}
