@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
-import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore } from "lucide-react";
+import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore, Square } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 import { useSignalRContext } from "@/components/signalr-provider";
@@ -390,13 +390,31 @@ export default function TimelinePage() {
                             onMouseLeave={() => setHoveredEventSessionId(null)}
                           >
                             <div className={`absolute left-0 top-1 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              isHighlighted ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : "border-primary bg-background"
+                              event.eventType === "session_end"
+                                ? "border-red-500 bg-red-100 dark:bg-red-900/30"
+                                : event.eventType === "stop"
+                                ? "border-gray-400 bg-gray-100 dark:bg-gray-800"
+                                : isHighlighted ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : "border-primary bg-background"
                             }`}>
-                              <Activity className="h-3 w-3 text-primary" />
+                              {event.eventType === "session_end" ? (
+                                <Square className="h-3 w-3 text-red-500" />
+                              ) : event.eventType === "stop" ? (
+                                <Square className="h-3 w-3 text-gray-500" />
+                              ) : (
+                                <Activity className="h-3 w-3 text-primary" />
+                              )}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                {event.eventType === "tool_use" && event.toolName ? (
+                                {event.eventType === "session_end" ? (
+                                  <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">
+                                    Session ended
+                                  </Badge>
+                                ) : event.eventType === "stop" ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    Session paused
+                                  </Badge>
+                                ) : event.eventType === "tool_use" && event.toolName ? (
                                   <Badge variant="outline" className="text-xs">
                                     {event.toolName}
                                   </Badge>
