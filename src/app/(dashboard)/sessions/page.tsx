@@ -55,13 +55,11 @@ export default function SessionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Sessions</h1>
-          <p className="text-muted-foreground">
-            View and manage your LLM CLI sessions
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold">Sessions</h1>
+        <p className="text-muted-foreground">
+          View and manage your LLM CLI sessions
+        </p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
