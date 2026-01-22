@@ -71,12 +71,11 @@ function getToolDisplayInfo(toolName: string | null, metadata: Record<string, un
     if (pattern) return pattern;
   }
 
-  // Bash - show truncated command
+  // Bash - show first line of command
   if (tool === "bash") {
     const command = input.command as string | undefined;
     if (command) {
-      const firstLine = command.split("\n")[0];
-      return firstLine.length > 60 ? firstLine.slice(0, 60) + "..." : firstLine;
+      return command.split("\n")[0];
     }
   }
 
@@ -427,7 +426,7 @@ export default function TimelinePage() {
                                   const toolInfo = getToolDisplayInfo(event.toolName, event.metadata);
                                   if (toolInfo) {
                                     return (
-                                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded truncate max-w-[200px]">
+                                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded break-words">
                                         {toolInfo}
                                       </code>
                                     );
