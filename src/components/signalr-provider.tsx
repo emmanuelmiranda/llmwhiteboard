@@ -24,7 +24,7 @@ interface SignalRContextValue {
   setHoverHighlightType: (type: HighlightType) => void;
   // Shared activity state tracking
   getSessionActivityState: (sessionId: string) => ActivityState;
-  updateSessionActivityState: (sessionId: string, eventType: string) => void;
+  updateSessionActivityState: (sessionId: string, eventType: string | undefined | null, toolName?: string | null) => void;
 }
 
 const SignalRContext = createContext<SignalRContextValue | null>(null);
@@ -39,19 +39,32 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
   // Time threshold for considering a session idle (5 minutes)
   const IDLE_THRESHOLD = 5 * 60 * 1000;
 
-  const getActivityStateFromEvent = (eventType: string): ActivityState => {
+  const getActivityStateFromEvent = (eventType: string | undefined | null, toolName?: string | null): ActivityState => {
+    if (!eventType) return "idle";
     const type = eventType.toLowerCase();
+    // Session stopped or ended = idle
     if (type === "stop" || type === "session_end") {
+      return "idle";
+    }
+    // Permission request = waiting for user approval
+    if (type === "permission_request") {
       return "waiting";
     }
+    // Claude asked a question = waiting for user input
+    // tool_use_start is from PreToolUse hook (fires when question is asked)
+    // tool_use is from PostToolUse hook (fires after user answers)
+    if ((type === "tool_use_start" || type === "tool_use") && toolName?.toLowerCase() === "askuserquestion") {
+      return "waiting";
+    }
+    // User submitted a prompt or any other activity = working
     return "working";
   };
 
-  const updateSessionActivityState = useCallback((sessionId: string, eventType: string) => {
+  const updateSessionActivityState = useCallback((sessionId: string, eventType: string | undefined | null, toolName?: string | null) => {
     setSessionActivityStates((prev) => {
       const next = new Map(prev);
       next.set(sessionId, {
-        state: getActivityStateFromEvent(eventType),
+        state: getActivityStateFromEvent(eventType, toolName),
         lastEventTime: Date.now(),
       });
       return next;

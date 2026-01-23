@@ -14,11 +14,16 @@ interface RecentEvent {
   timestamp: number;
 }
 
+interface SessionEventInfo {
+  eventType: string;
+  toolName?: string | null;
+}
+
 interface PersistedState {
   recentEvents: RecentEvent[];
   promptCount: number;
   toolCount: number;
-  sessionLastEvents: Record<string, string>;
+  sessionLastEvents: Record<string, SessionEventInfo>;
   savedAt: number;
 }
 
@@ -58,8 +63,8 @@ export function ActivityStats() {
   // Session stats
   const [activeSessionCount, setActiveSessionCount] = useState(0);
 
-  // Track sessions waiting for input (last event was stop/session_end)
-  const [sessionLastEvents, setSessionLastEvents] = useState<Map<string, string>>(new Map());
+  // Track sessions waiting for input
+  const [sessionLastEvents, setSessionLastEvents] = useState<Map<string, SessionEventInfo>>(new Map());
 
   // Load persisted state on mount
   useEffect(() => {
@@ -76,8 +81,8 @@ export function ActivityStats() {
         const entries = Object.entries(persisted.sessionLastEvents);
         setSessionLastEvents(new Map(entries));
         // Also update shared context state
-        entries.forEach(([sessionId, eventType]) => {
-          updateSessionActivityState(sessionId, eventType);
+        entries.forEach(([sessionId, info]) => {
+          updateSessionActivityState(sessionId, info.eventType, info.toolName);
         });
       }
     }
@@ -97,7 +102,7 @@ export function ActivityStats() {
   }, [initialized, recentEvents, promptCount, toolCount, sessionLastEvents]);
 
   // Track events for rate calculation (keep last 5 minutes)
-  const addEvent = useCallback((eventType: string, eventId: string, sessionId: string) => {
+  const addEvent = useCallback((eventType: string, eventId: string, sessionId: string, toolName?: string | null) => {
     const now = Date.now();
     setRecentEvents((prev) => {
       // Add new event and filter out events older than 5 minutes
@@ -117,21 +122,37 @@ export function ActivityStats() {
     // Track last event per session for waiting detection
     setSessionLastEvents((prev) => {
       const next = new Map(prev);
-      next.set(sessionId, eventType);
+      next.set(sessionId, { eventType, toolName });
       return next;
     });
 
     // Update shared context state
-    updateSessionActivityState(sessionId, eventType);
+    updateSessionActivityState(sessionId, eventType, toolName);
   }, [updateSessionActivityState]);
 
-  // Count sessions waiting for input vs working
-  const waitingCount = Array.from(sessionLastEvents.values()).filter(
-    (eventType) => eventType === "stop" || eventType === "session_end"
+  // Count sessions by state
+  // tool_use_start is from PreToolUse hook (fires when question is asked)
+  // tool_use is from PostToolUse hook (fires after user answers)
+  // permission_request is when waiting for user to approve an action
+  const isWaitingEvent = (info: SessionEventInfo) => {
+    if (info.eventType === "permission_request") return true;
+    if ((info.eventType === "tool_use_start" || info.eventType === "tool_use") && info.toolName?.toLowerCase() === "askuserquestion") return true;
+    return false;
+  };
+
+  const waitingCount = Array.from(sessionLastEvents.values()).filter(isWaitingEvent).length;
+
+  const idleCount = Array.from(sessionLastEvents.values()).filter(
+    (info) => !info.eventType || info.eventType === "stop" || info.eventType === "session_end"
   ).length;
 
   const workingCount = Array.from(sessionLastEvents.values()).filter(
-    (eventType) => eventType !== "stop" && eventType !== "session_end"
+    (info) => {
+      if (!info.eventType) return false;
+      if (info.eventType === "stop" || info.eventType === "session_end") return false;
+      if (isWaitingEvent(info)) return false;
+      return true;
+    }
   ).length;
 
   // Calculate events per minute from recent events
@@ -169,7 +190,7 @@ export function ActivityStats() {
   // Subscribe to real-time events
   useEffect(() => {
     const unsubscribeEvent = onNewEvent((event) => {
-      addEvent(event.eventType, event.id, event.sessionId);
+      addEvent(event.eventType, event.id, event.sessionId, event.toolName);
     });
 
     const unsubscribeCreated = onSessionCreated(() => {

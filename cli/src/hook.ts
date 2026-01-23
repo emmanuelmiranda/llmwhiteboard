@@ -13,12 +13,12 @@ import { readConfig, getMachineId, readEncryptionKey } from "./lib/config.js";
 import { encrypt, computeChecksum } from "./lib/crypto.js";
 
 interface HookContext {
-  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
+  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "PermissionRequest" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
   session_id: string;
   cwd: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
-  tool_response?: { stdout?: string; stderr?: string };
+  tool_response?: unknown;
   message?: string;
   transcript_path?: string;
   trigger?: "manual" | "auto"; // For PreCompact events
@@ -66,7 +66,9 @@ async function main() {
       UserPromptSubmit: "user_prompt",
       SessionStart: "session_start",
       SessionEnd: "session_end",
+      PreToolUse: "tool_use_start",
       PostToolUse: "tool_use",
+      PermissionRequest: "permission_request",
       Stop: "stop",
       Notification: "message",
       PreCompact: "compaction",
@@ -106,6 +108,7 @@ async function main() {
     } else if (context.tool_name) {
       eventSummary = `Used ${context.tool_name}`;
       if (context.tool_input) eventMetadata.input = context.tool_input;
+      if (context.tool_response) eventMetadata.response = context.tool_response;
     } else {
       eventSummary = context.message;
     }

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
-import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore, Square } from "lucide-react";
+import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore, Square, Wrench, MessageSquare, Play, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 import { useSignalRContext } from "@/components/signalr-provider";
@@ -99,7 +99,65 @@ function getToolDisplayInfo(toolName: string | null, metadata: Record<string, un
     if (description) return description;
   }
 
+  // AskUserQuestion - show question and answer
+  if (tool === "askuserquestion") {
+    const questions = input.questions as Array<{ question?: string }> | undefined;
+    const firstQuestion = questions?.[0]?.question;
+    return firstQuestion || null;
+  }
+
   return null;
+}
+
+// Get the answer for AskUserQuestion from tool response
+function getAskUserAnswer(toolName: string | null, metadata: Record<string, unknown> | null): string | null {
+  if (!toolName || toolName.toLowerCase() !== "askuserquestion" || !metadata) return null;
+
+  const response = metadata.response as Record<string, unknown> | string | undefined;
+
+  // Response might be a string directly or an object with answers
+  if (typeof response === "string") {
+    // Try to parse it if it looks like JSON
+    try {
+      const parsed = JSON.parse(response);
+      if (parsed.answers) {
+        const answers = Object.values(parsed.answers);
+        if (answers.length > 0) return String(answers[0]);
+      }
+    } catch {
+      return response;
+    }
+  }
+
+  if (typeof response === "object" && response) {
+    // Check for answers property
+    const answers = (response as Record<string, unknown>).answers as Record<string, string> | undefined;
+    if (answers) {
+      const answerValues = Object.values(answers);
+      if (answerValues.length > 0) return answerValues[0];
+    }
+  }
+
+  return null;
+}
+
+// Get permission request details
+function getPermissionRequestInfo(eventType: string, toolName: string | null, metadata: Record<string, unknown> | null): { tool: string; action?: string } | null {
+  if (eventType !== "permission_request") return null;
+
+  // toolName from the event indicates which tool needs permission
+  // metadata might have additional info
+  const tool = toolName || (metadata?.tool_name as string) || "Unknown";
+  const input = metadata?.input as Record<string, unknown> | undefined;
+
+  // Try to get a meaningful action description
+  let action: string | undefined;
+  if (input) {
+    if (input.command) action = String(input.command).split("\n")[0];
+    else if (input.file_path) action = String(input.file_path).split(/[/\\]/).pop();
+  }
+
+  return { tool, action };
 }
 
 const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "secondary"> = {
@@ -196,7 +254,7 @@ export default function TimelinePage() {
       });
       addEventGlow(newEvent.id);
       // Track activity state
-      updateSessionActivityState(newEvent.sessionId, newEvent.eventType);
+      updateSessionActivityState(newEvent.sessionId, newEvent.eventType, newEvent.toolName);
     });
 
     const unsubscribeCreated = onSessionCreated((newSession) => {
@@ -310,7 +368,7 @@ export default function TimelinePage() {
                         {activityState === "waiting" ? (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 shrink-0">
                             <MessageSquareMore className="h-3 w-3 mr-0.5" />
-                            Waiting
+                            Needs input
                           </span>
                         ) : activityState === "working" ? (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
@@ -393,12 +451,36 @@ export default function TimelinePage() {
                                 ? "border-red-500 bg-red-100 dark:bg-red-900/30"
                                 : event.eventType === "stop"
                                 ? "border-gray-400 bg-gray-100 dark:bg-gray-800"
+                                : event.eventType === "session_start"
+                                ? "border-green-500 bg-green-100 dark:bg-green-900/30"
+                                : event.eventType === "user_prompt"
+                                ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30"
+                                : event.eventType === "permission_request"
+                                ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30"
+                                : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName?.toLowerCase() === "askuserquestion"
+                                ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30"
+                                : event.eventType === "tool_use" || event.eventType === "tool_use_start"
+                                ? "border-purple-500 bg-purple-100 dark:bg-purple-900/30"
+                                : event.eventType === "context_compaction"
+                                ? "border-orange-500 bg-orange-100 dark:bg-orange-900/30"
                                 : isHighlighted ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : "border-primary bg-background"
                             }`}>
                               {event.eventType === "session_end" ? (
                                 <Square className="h-3 w-3 text-red-500" />
                               ) : event.eventType === "stop" ? (
                                 <Square className="h-3 w-3 text-gray-500" />
+                              ) : event.eventType === "session_start" ? (
+                                <Play className="h-3 w-3 text-green-500" />
+                              ) : event.eventType === "user_prompt" ? (
+                                <MessageSquare className="h-3 w-3 text-blue-500" />
+                              ) : event.eventType === "permission_request" ? (
+                                <ShieldAlert className="h-3 w-3 text-amber-500" />
+                              ) : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName?.toLowerCase() === "askuserquestion" ? (
+                                <MessageSquareMore className="h-3 w-3 text-amber-500" />
+                              ) : event.eventType === "tool_use" || event.eventType === "tool_use_start" ? (
+                                <Wrench className="h-3 w-3 text-purple-500" />
+                              ) : event.eventType === "context_compaction" ? (
+                                <RefreshCw className="h-3 w-3 text-orange-500" />
                               ) : (
                                 <Activity className="h-3 w-3 text-primary" />
                               )}
@@ -413,8 +495,24 @@ export default function TimelinePage() {
                                   <Badge variant="outline" className="text-xs">
                                     Session paused
                                   </Badge>
-                                ) : event.eventType === "tool_use" && event.toolName ? (
-                                  <Badge variant="outline" className="text-xs">
+                                ) : event.eventType === "session_start" ? (
+                                  <Badge variant="outline" className="text-xs border-green-300 text-green-700 dark:border-green-700 dark:text-green-300">
+                                    Session started
+                                  </Badge>
+                                ) : event.eventType === "user_prompt" ? (
+                                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                                    User prompt
+                                  </Badge>
+                                ) : event.eventType === "permission_request" ? (
+                                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
+                                    Permission needed
+                                  </Badge>
+                                ) : event.eventType === "context_compaction" ? (
+                                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
+                                    Compaction
+                                  </Badge>
+                                ) : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName ? (
+                                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
                                     {event.toolName}
                                   </Badge>
                                 ) : (
@@ -423,6 +521,48 @@ export default function TimelinePage() {
                                   </Badge>
                                 )}
                                 {(() => {
+                                  // Special handling for AskUserQuestion
+                                  if (event.toolName?.toLowerCase() === "askuserquestion") {
+                                    const question = getToolDisplayInfo(event.toolName, event.metadata);
+                                    const answer = getAskUserAnswer(event.toolName, event.metadata);
+                                    const isWaiting = event.eventType === "tool_use_start";
+                                    return (
+                                      <div className="flex flex-col gap-1">
+                                        {question && (
+                                          <span className="text-xs text-muted-foreground italic">
+                                            &quot;{question}&quot;
+                                          </span>
+                                        )}
+                                        {isWaiting ? (
+                                          <span className="text-xs text-amber-600 dark:text-amber-400">
+                                            Waiting for response...
+                                          </span>
+                                        ) : answer ? (
+                                          <span className="text-xs text-green-600 dark:text-green-400">
+                                            → {answer}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  }
+
+                                  // Special handling for permission requests
+                                  if (event.eventType === "permission_request") {
+                                    const permInfo = getPermissionRequestInfo(event.eventType, event.toolName, event.metadata);
+                                    if (permInfo) {
+                                      return (
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-xs text-muted-foreground">
+                                            {permInfo.tool}{permInfo.action ? `: ${permInfo.action}` : ""}
+                                          </span>
+                                          <span className="text-xs text-amber-600 dark:text-amber-400">
+                                            Waiting for approval...
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                  }
+
                                   const toolInfo = getToolDisplayInfo(event.toolName, event.metadata);
                                   if (toolInfo) {
                                     return (
@@ -432,7 +572,7 @@ export default function TimelinePage() {
                                     );
                                   }
                                   // Fall back to summary for non-tool events (like user_prompt)
-                                  if (event.eventType !== "tool_use" && event.summary) {
+                                  if (event.eventType !== "tool_use" && event.eventType !== "tool_use_start" && event.summary) {
                                     return (
                                       <span className="text-xs text-muted-foreground truncate">
                                         {event.summary}

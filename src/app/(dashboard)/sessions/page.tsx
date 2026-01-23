@@ -103,7 +103,7 @@ export default function SessionsPage() {
 
     const unsubscribeNewEvent = onNewEvent((event) => {
       // Update activity state based on event type
-      updateSessionActivityState(event.sessionId, event.eventType);
+      updateSessionActivityState(event.sessionId, event.eventType, event.toolName);
     });
 
     return () => {

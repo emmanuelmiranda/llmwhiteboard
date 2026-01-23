@@ -113,7 +113,9 @@ export class ClaudeCodeAdapter implements CliAdapter {
       "SessionStart",
       "SessionEnd",
       "UserPromptSubmit",
+      "PreToolUse",  // For AskUserQuestion - detect when waiting for user input
       "PostToolUse",
+      "PermissionRequest",  // Detect when waiting for permission approval
       "Stop",
       "PreCompact",
     ];
@@ -124,7 +126,13 @@ export class ClaudeCodeAdapter implements CliAdapter {
 
     for (const hookName of this.getDefaultHooks()) {
       // PostToolUse needs a matcher to match all tools
-      const matcher = hookName === "PostToolUse" ? "*" : undefined;
+      // PreToolUse only matches AskUserQuestion to detect when waiting for user input
+      let matcher: string | undefined;
+      if (hookName === "PostToolUse") {
+        matcher = "*";
+      } else if (hookName === "PreToolUse") {
+        matcher = "AskUserQuestion";
+      }
       hooks[hookName] = [this.createHookEntry(hookCommand, matcher)];
     }
 
