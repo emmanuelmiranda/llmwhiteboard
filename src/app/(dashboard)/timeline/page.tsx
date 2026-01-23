@@ -167,6 +167,39 @@ const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "s
   Archived: "secondary",
 };
 
+type EventFilter = "all" | "prompts" | "tools" | "waiting" | "sessions" | "compaction";
+type SessionFilter = "all" | "active" | "working" | "waiting" | "idle";
+
+const eventFilters: { value: EventFilter; label: string; icon: typeof Activity }[] = [
+  { value: "all", label: "All", icon: Activity },
+  { value: "prompts", label: "Prompts", icon: MessageSquare },
+  { value: "tools", label: "Tools", icon: Wrench },
+  { value: "waiting", label: "Waiting", icon: MessageSquareMore },
+  { value: "sessions", label: "Sessions", icon: Play },
+  { value: "compaction", label: "Compaction", icon: RefreshCw },
+];
+
+const sessionFilters: { value: SessionFilter; label: string; icon: typeof Activity }[] = [
+  { value: "all", label: "All", icon: Clock },
+  { value: "active", label: "Active", icon: Activity },
+  { value: "working", label: "Working", icon: Loader2 },
+  { value: "waiting", label: "Waiting", icon: MessageSquareMore },
+  { value: "idle", label: "Idle", icon: Square },
+];
+
+function matchesEventFilter(eventType: string, toolName: string | null, filter: EventFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "prompts") return eventType === "user_prompt";
+  if (filter === "tools") return eventType === "tool_use" || eventType === "tool_use_start";
+  if (filter === "waiting") {
+    return eventType === "permission_request" ||
+           ((eventType === "tool_use" || eventType === "tool_use_start") && toolName?.toLowerCase() === "askuserquestion");
+  }
+  if (filter === "sessions") return eventType === "session_start" || eventType === "session_end" || eventType === "stop";
+  if (filter === "compaction") return eventType === "context_compaction";
+  return true;
+}
+
 export default function TimelinePage() {
   const [sessions, setSessions] = useState<TimelineSession[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
@@ -175,6 +208,8 @@ export default function TimelinePage() {
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const [hoveredEventSessionId, setHoveredEventSessionId] = useState<string | null>(null);
+  const [eventFilter, setEventFilter] = useState<EventFilter>("all");
+  const [sessionFilter, setSessionFilter] = useState<SessionFilter>("all");
   const { toast } = useToast();
   const {
     onSessionCreated,
@@ -286,8 +321,31 @@ export default function TimelinePage() {
     };
   }, [onNewEvent, onSessionCreated, onSessionUpdated, addEventGlow, addSessionGlow, updateSessionActivityState]);
 
-  // Group events by date
-  const groupedEvents = events.reduce(
+  // Filter sessions based on selected filter
+  const matchesSessionFilter = useCallback((session: TimelineSession, filter: SessionFilter): boolean => {
+    if (filter === "all") return true;
+    const activityState = getActivityState(session.id, session.status);
+    if (filter === "active") return session.status === "Active";
+    if (filter === "working") return activityState === "working";
+    if (filter === "waiting") return activityState === "waiting";
+    if (filter === "idle") return activityState === "idle" || session.status !== "Active";
+    return true;
+  }, [getActivityState]);
+
+  const filteredSessions = sessions.filter((session) => matchesSessionFilter(session, sessionFilter));
+  const filteredSessionIds = new Set(filteredSessions.map((s) => s.id));
+
+  // Filter events: cascade from session filter, then apply event filter
+  const filteredEvents = events.filter((event) => {
+    // If session filter is active, only show events from visible sessions
+    if (sessionFilter !== "all" && !filteredSessionIds.has(event.sessionId)) {
+      return false;
+    }
+    return matchesEventFilter(event.eventType, event.toolName, eventFilter);
+  });
+
+  // Group filtered events by date
+  const groupedEvents = filteredEvents.reduce(
     (groups, event) => {
       const date = new Date(event.createdAt).toLocaleDateString();
       if (!groups[date]) {
@@ -331,17 +389,39 @@ export default function TimelinePage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Recent Sessions */}
         <Card className="lg:col-span-1">
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center text-lg">
               <Clock className="h-5 w-5 mr-2" />
               Recent Sessions
             </CardTitle>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {sessionFilters.map((filter) => {
+                const Icon = filter.icon;
+                const isActive = sessionFilter === filter.value;
+                return (
+                  <button
+                    key={filter.value}
+                    onClick={() => setSessionFilter(filter.value)}
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    <Icon className={`h-3 w-3 mr-1 ${filter.value === "working" && isActive ? "animate-spin" : ""}`} />
+                    {filter.label}
+                  </button>
+                );
+              })}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {sessions.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No sessions yet</p>
+            {filteredSessions.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                {sessions.length === 0 ? "No sessions yet" : "No matching sessions"}
+              </p>
             ) : (
-              sessions.slice(0, 10).map((session) => {
+              filteredSessions.slice(0, 10).map((session) => {
                 const activityState = getActivityState(session.id, session.status);
                 const shouldPulse = highlightType && activityState === highlightType;
                 const shouldStatsHover = hoverHighlightType && activityState === hoverHighlightType;
@@ -410,16 +490,38 @@ export default function TimelinePage() {
 
         {/* Event Timeline */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center text-lg">
               <Activity className="h-5 w-5 mr-2" />
               Activity Timeline
             </CardTitle>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {eventFilters.map((filter) => {
+                const Icon = filter.icon;
+                const isActive = eventFilter === filter.value;
+                return (
+                  <button
+                    key={filter.value}
+                    onClick={() => setEventFilter(filter.value)}
+                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    <Icon className="h-3 w-3 mr-1.5" />
+                    {filter.label}
+                  </button>
+                );
+              })}
+            </div>
           </CardHeader>
           <CardContent>
-            {events.length === 0 ? (
+            {filteredEvents.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
-                No events yet. Start using Claude Code to see your activity here.
+                {events.length === 0
+                  ? "No events yet. Start using Claude Code to see your activity here."
+                  : `No ${eventFilter === "all" ? "" : eventFilter + " "}events found.`}
               </p>
             ) : (
               <div className="space-y-6">
