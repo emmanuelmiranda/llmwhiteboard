@@ -162,7 +162,7 @@ export default function WhiteboardPage() {
 
       {/* Custom Groups */}
       {groups.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {groups.map((group) => {
             const groupSessions = sessions.filter((s) =>
               group.sessions.includes(s.id)
@@ -170,13 +170,13 @@ export default function WhiteboardPage() {
             return (
               <Card
                 key={group.id}
-                className={`${group.color} border-2`}
+                className={`${group.color} border-2 overflow-hidden`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => handleDrop(group.id)}
               >
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{group.name}</CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-lg break-words min-w-0">{group.name}</CardTitle>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -211,15 +211,15 @@ export default function WhiteboardPage() {
       {/* Sessions by Project */}
       <div className="space-y-6">
         {Object.entries(sessionsByProject).map(([project, projectSessions]) => (
-          <Card key={project}>
+          <Card key={project} className="overflow-hidden">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center text-lg">
-                <Folder className="h-5 w-5 mr-2 text-muted-foreground" />
-                {project}
+              <CardTitle className="flex items-center text-lg min-w-0">
+                <Folder className="h-5 w-5 mr-2 text-muted-foreground flex-shrink-0" />
+                <span className="break-words">{project}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {projectSessions.map((session) => (
                   <SessionMiniCard
                     key={session.id}
@@ -257,7 +257,7 @@ function SessionMiniCard({
 }) {
   return (
     <div
-      className="flex items-start p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors"
+      className="flex items-start p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors overflow-hidden"
     >
       <div
         draggable
@@ -266,21 +266,21 @@ function SessionMiniCard({
       >
         <GripVertical className="h-4 w-4 text-muted-foreground mr-2 mt-0.5 flex-shrink-0" />
       </div>
-      <Link href={`/sessions/${session.id}`} className="min-w-0 flex-1" draggable={false}>
-        <div className="flex items-center justify-between gap-2">
-          <p className="font-medium text-sm truncate">
+      <Link href={`/sessions/${session.id}`} className="min-w-0 flex-1 overflow-hidden" draggable={false}>
+        <div className="space-y-1">
+          <p className="font-medium text-sm break-words">
             {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
           </p>
           <Badge
             variant={statusColors[session.status] || "default"}
-            className="text-xs flex-shrink-0"
+            className="text-xs"
           >
             {session.status || "Unknown"}
           </Badge>
         </div>
-        <div className="flex items-center text-xs text-muted-foreground mt-1 flex-wrap gap-1">
+        <div className="flex items-center text-xs text-muted-foreground mt-2 flex-wrap gap-1">
           <span className="flex items-center">
-            <Activity className="h-3 w-3 mr-1" />
+            <Activity className="h-3 w-3 mr-1 flex-shrink-0" />
             {session.eventCount} events
           </span>
           <span>·</span>

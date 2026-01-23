@@ -1,8 +1,10 @@
 # LLM Whiteboard
 
-> Stop losing track of your LLM sessions. Visualize, resume, and share your AI-assisted work.
+> One dashboard for your AI work. Track activity in real-time, see which sessions need input, and resume from anywhere.
 
 A web-based dashboard for visualizing, managing, and resuming Claude Code and Gemini CLI sessions across machines.
+
+![LLM Whiteboard Timeline Demo](public/timeline-demo.gif)
 
 ## Architecture
 

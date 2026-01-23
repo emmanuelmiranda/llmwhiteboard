@@ -57,13 +57,13 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-24 text-center">
         <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-          Stop losing track of your
+          One dashboard for your
           <br />
-          <span className="text-primary">LLM sessions</span>
+          <span className="text-primary">AI work</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-          Visualize, resume, and share your AI-assisted work. Sync your Claude
-          Code and Gemini CLI sessions across machines and never lose context again.
+          Track activity across all your sessions in real-time. See which ones
+          need input, resume from anywhere, and never lose context.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4">
           <Link href="/signup">
@@ -85,6 +85,17 @@ export default function LandingPage() {
         <p className="mt-4 text-sm text-muted-foreground">
           Free to self-host. No credit card required.
         </p>
+
+        {/* Demo GIF */}
+        <div className="mt-16 mx-auto max-w-xl">
+          <div className="rounded-xl border bg-card shadow-2xl overflow-hidden">
+            <img
+              src="/timeline-demo.gif"
+              alt="LLM Whiteboard Timeline Demo"
+              className="w-full h-auto"
+            />
+          </div>
+        </div>
       </section>
 
       {/* Features */}
@@ -220,9 +231,6 @@ export default function LandingPage() {
               <div className="h-6 w-6 rounded bg-primary" />
               <span className="font-bold">LLM Whiteboard</span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Open source. Built with Next.js, ASP.NET Core, and PostgreSQL.
-            </p>
             <div className="flex items-center space-x-4">
               <a
                 href="https://github.com/emmanuelmiranda/llmwhiteboard"

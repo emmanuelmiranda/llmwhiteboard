@@ -371,8 +371,8 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-6 overflow-hidden">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold">Timeline</h1>
           <p className="text-muted-foreground">
@@ -386,9 +386,9 @@ export default function TimelinePage() {
         <ActivityStats />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 overflow-hidden">
         {/* Recent Sessions */}
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-1 overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center text-lg">
               <Clock className="h-5 w-5 mr-2" />
@@ -415,7 +415,7 @@ export default function TimelinePage() {
               })}
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 overflow-hidden">
             {filteredSessions.length === 0 ? (
               <p className="text-muted-foreground text-sm">
                 {sessions.length === 0 ? "No sessions yet" : "No matching sessions"}
@@ -431,7 +431,7 @@ export default function TimelinePage() {
                   <Link
                     key={session.id}
                     href={`/sessions/${session.id}`}
-                    className={`block p-3 rounded-lg border transition-colors ${
+                    className={`block p-3 rounded-lg border transition-colors overflow-hidden ${
                       glowingSessionIds.has(session.id) ? "realtime-glow" : ""
                     } ${activityState === "waiting" && !isHighlighted ? "border-amber-400 dark:border-amber-500" : ""} ${
                       shouldPulse ? `highlight-pulse-${highlightType}` : ""
@@ -441,7 +441,7 @@ export default function TimelinePage() {
                   >
                     <div className="space-y-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="font-medium text-sm break-words">
+                        <p className="font-medium text-sm break-words min-w-0">
                           {session.title ||
                             `Session ${session.localSessionId.slice(0, 8)}`}
                         </p>
@@ -489,7 +489,7 @@ export default function TimelinePage() {
         </Card>
 
         {/* Event Timeline */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center text-lg">
               <Activity className="h-5 w-5 mr-2" />
@@ -516,7 +516,7 @@ export default function TimelinePage() {
               })}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-hidden">
             {filteredEvents.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 {events.length === 0
@@ -524,7 +524,7 @@ export default function TimelinePage() {
                   : `No ${eventFilter === "all" ? "" : eventFilter + " "}events found.`}
               </p>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-6 overflow-hidden">
                 {Object.entries(groupedEvents).map(([date, dateEvents]) => (
                   <div key={date}>
                     <h3 className="text-sm font-medium text-muted-foreground mb-3">
@@ -542,7 +542,7 @@ export default function TimelinePage() {
                         return (
                           <div
                             key={event.id}
-                            className={`flex items-start pl-8 relative rounded-lg transition-colors duration-200 ${
+                            className={`flex items-start pl-8 relative rounded-lg transition-colors duration-200 min-w-0 ${
                               glowingEventIds.has(event.id) ? "realtime-glow" : ""
                             } ${isHighlighted ? "bg-amber-100 dark:bg-amber-900/30" : ""}`}
                             onMouseEnter={() => setHoveredEventSessionId(event.sessionId)}
@@ -588,7 +588,7 @@ export default function TimelinePage() {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {event.eventType === "session_end" ? (
                                   <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">
                                     Session ended
@@ -629,9 +629,9 @@ export default function TimelinePage() {
                                     const answer = getAskUserAnswer(event.toolName, event.metadata);
                                     const isWaiting = event.eventType === "tool_use_start";
                                     return (
-                                      <div className="flex flex-col gap-1">
+                                      <div className="flex flex-col gap-1 min-w-0">
                                         {question && (
-                                          <span className="text-xs text-muted-foreground italic">
+                                          <span className="text-xs text-muted-foreground italic break-words">
                                             &quot;{question}&quot;
                                           </span>
                                         )}
@@ -640,7 +640,7 @@ export default function TimelinePage() {
                                             Waiting for response...
                                           </span>
                                         ) : answer ? (
-                                          <span className="text-xs text-green-600 dark:text-green-400">
+                                          <span className="text-xs text-green-600 dark:text-green-400 break-words">
                                             → {answer}
                                           </span>
                                         ) : null}
@@ -653,8 +653,8 @@ export default function TimelinePage() {
                                     const permInfo = getPermissionRequestInfo(event.eventType, event.toolName, event.metadata);
                                     if (permInfo) {
                                       return (
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-xs text-muted-foreground">
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <span className="text-xs text-muted-foreground break-words">
                                             {permInfo.tool}{permInfo.action ? `: ${permInfo.action}` : ""}
                                           </span>
                                           <span className="text-xs text-amber-600 dark:text-amber-400">
@@ -668,7 +668,7 @@ export default function TimelinePage() {
                                   const toolInfo = getToolDisplayInfo(event.toolName, event.metadata);
                                   if (toolInfo) {
                                     return (
-                                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded break-words">
+                                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded block truncate max-w-[200px] sm:max-w-[300px] md:max-w-full">
                                         {toolInfo}
                                       </code>
                                     );
@@ -676,7 +676,7 @@ export default function TimelinePage() {
                                   // Fall back to summary for non-tool events (like user_prompt)
                                   if (event.eventType !== "tool_use" && event.eventType !== "tool_use_start" && event.summary) {
                                     return (
-                                      <span className="text-xs text-muted-foreground truncate">
+                                      <span className="text-xs text-muted-foreground truncate block max-w-[200px] sm:max-w-[300px] md:max-w-full">
                                         {event.summary}
                                       </span>
                                     );
