@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { createRequire } from "module";
 import { initCommand } from "./commands/init.js";
+import { loginCommand } from "./commands/login.js";
 import { listCommand } from "./commands/list.js";
 import { resumeCommand } from "./commands/resume.js";
 import { syncCommand } from "./commands/sync.js";
@@ -33,6 +34,14 @@ program
   .option("--cli <types>", "CLI tools to integrate (comma-separated: claude-code,gemini-cli)")
   .option("--no-url-notify", "Disable session URL notification after each response")
   .action(initCommand);
+
+program
+  .command("login")
+  .description("Authenticate with LLM Whiteboard via GitHub")
+  .option("-t, --token <token>", "API token (manual entry)")
+  .option("-u, --url <url>", "API URL (default: https://api.llmwhiteboard.com)")
+  .option("-m, --machine-id <id>", "Machine name for this token")
+  .action(loginCommand);
 
 program
   .command("list")

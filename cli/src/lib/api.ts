@@ -128,4 +128,70 @@ export async function downloadSnapshot(snapshotId: string): Promise<TranscriptRe
   return makeRequest<TranscriptResponse>(`/api/sync/snapshot/${snapshotId}`);
 }
 
+// GitHub Device Flow types
+export interface DeviceCodeResponse {
+  clientId: string;
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface DeviceTokenResponse {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    image: string | null;
+  };
+}
+
+/**
+ * Request a device code from the backend to start GitHub device flow
+ */
+export async function requestDeviceCode(apiUrl: string): Promise<DeviceCodeResponse> {
+  const response = await fetch(`${apiUrl}/api/auth/github/device-code`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: "Request failed" })) as { error?: string };
+    throw new Error(errorBody.error || `HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<DeviceCodeResponse>;
+}
+
+/**
+ * Exchange a GitHub access token for an LLM Whiteboard API token
+ */
+export async function exchangeGitHubToken(
+  apiUrl: string,
+  accessToken: string,
+  machineName?: string
+): Promise<DeviceTokenResponse> {
+  const response = await fetch(`${apiUrl}/api/auth/github/device-token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      accessToken,
+      machineName,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: "Request failed" })) as { error?: string };
+    throw new Error(errorBody.error || `HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<DeviceTokenResponse>;
+}
+
 export { type Session, type TranscriptResponse };

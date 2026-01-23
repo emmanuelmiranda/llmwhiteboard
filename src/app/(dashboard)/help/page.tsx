@@ -72,24 +72,23 @@ export default function HelpPage() {
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               <li>Node.js 18+ installed</li>
               <li>Claude Code or Gemini CLI installed</li>
-              <li>An API token from <a href="/settings/tokens" className="text-primary underline">Settings &gt; API Tokens</a></li>
             </ul>
           </div>
 
           <div className="space-y-3">
-            <p className="font-medium">Step 1: Get an API Token</p>
+            <p className="font-medium">Step 1: Run the Setup Command</p>
+            <CodeBlock>{`npx llmwhiteboard init`}</CodeBlock>
             <p className="text-sm text-muted-foreground">
-              Create a token at{" "}
-              <a href="/settings/tokens" className="text-primary underline">
-                Settings &gt; API Tokens
-              </a>
-              . Copy the token (starts with <code className="bg-muted px-1 rounded">lwb_sk_</code>).
+              If you&apos;re not logged in, the CLI will prompt you to authenticate via GitHub (recommended) or enter a token manually.
             </p>
           </div>
 
           <div className="space-y-3">
-            <p className="font-medium">Step 2: Run the Setup Command</p>
-            <CodeBlock>{`npx llmwhiteboard init --token YOUR_TOKEN --machine-id "My-MacBook"`}</CodeBlock>
+            <p className="font-medium">Alternative: Login First</p>
+            <p className="text-sm text-muted-foreground">
+              You can authenticate separately before running init:
+            </p>
+            <CodeBlock>{`npx llmwhiteboard login`}</CodeBlock>
             <p className="text-sm text-muted-foreground">
               This command will:
             </p>
@@ -129,12 +128,14 @@ export default function HelpPage() {
           <CodeBlock>{`npx llmwhiteboard init [options]
 
 Options:
-  -t, --token <token>       API token (required)
+  -t, --token <token>       API token (or login interactively)
   -m, --machine-id <id>     Machine name (default: auto-generated)
   -u, --url <url>           API URL (default: https://api.llmwhiteboard.com)
   -p, --project             Install hooks for current project only
   -e, --enable-encryption   Enable end-to-end encryption
-  --cli <type>              CLI type: claude-code (default) or gemini-cli`}</CodeBlock>
+  --cli <type>              CLI type: claude-code (default) or gemini-cli
+  --hooks-only              Just reinstall hooks without reconfiguring
+  --no-url-notify           Disable session URL notification after each response`}</CodeBlock>
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
             <p className="font-medium">Hook Installation:</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
@@ -157,6 +158,57 @@ Options:
               Use <code className="bg-background px-1 rounded">--url</code> to point to your own server:
             </p>
             <CodeBlock copyable={false}>{`npx llmwhiteboard init --url https://api.your-domain.com ...`}</CodeBlock>
+          </div>
+
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+            <p className="font-medium">Reinstall Hooks:</p>
+            <p className="text-sm text-muted-foreground">
+              Use <code className="bg-background px-1 rounded">--hooks-only</code> to reinstall hooks without reconfiguring. Useful after CLI updates:
+            </p>
+            <CodeBlock copyable={false}>{`npx llmwhiteboard init --hooks-only`}</CodeBlock>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Login Command */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Key className="h-5 w-5" />
+            Login Command
+          </CardTitle>
+          <CardDescription>
+            Authenticate with LLM Whiteboard via GitHub or manual token entry.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CodeBlock>{`npx llmwhiteboard login [options]
+
+Options:
+  -t, --token <token>       API token (manual entry)
+  -u, --url <url>           API URL (default: https://api.llmwhiteboard.com)
+  -m, --machine-id <id>     Machine name for this token`}</CodeBlock>
+
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+            <p className="font-medium">GitHub Device Flow (Recommended):</p>
+            <p className="text-sm text-muted-foreground">
+              Running <code className="bg-background px-1 rounded">llmwhiteboard login</code> without a token will initiate GitHub Device Flow:
+            </p>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 mt-2">
+              <li>The CLI displays a verification URL and code</li>
+              <li>Open the URL in your browser and enter the code</li>
+              <li>Authorize LLM Whiteboard to access your GitHub account</li>
+              <li>The CLI automatically receives your credentials</li>
+            </ol>
+          </div>
+
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+            <p className="font-medium">Manual Token Entry:</p>
+            <p className="text-sm text-muted-foreground">
+              If you prefer to use a token, you can pass it directly or generate one at{" "}
+              <a href="/settings/tokens" className="text-primary underline">Settings &gt; API Tokens</a>:
+            </p>
+            <CodeBlock copyable={false}>{`npx llmwhiteboard login --token lwb_sk_YOUR_TOKEN`}</CodeBlock>
           </div>
         </CardContent>
       </Card>

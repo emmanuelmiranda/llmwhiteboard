@@ -11,6 +11,7 @@ public class GitHubOAuthService : IGitHubOAuthService
     private readonly string? _clientSecret;
 
     public bool IsConfigured => !string.IsNullOrEmpty(_clientId) && !string.IsNullOrEmpty(_clientSecret);
+    public string? ClientId => _clientId;
 
     public GitHubOAuthService(IHttpClientFactory httpClientFactory, IConfiguration config)
     {
@@ -126,6 +127,45 @@ public class GitHubOAuthService : IGitHubOAuthService
         }
 
         return null;
+    }
+
+    public async Task<GitHubDeviceCodeInfo> RequestDeviceCodeAsync()
+    {
+        if (!IsConfigured)
+            throw new InvalidOperationException("GitHub OAuth is not configured");
+
+        var client = _httpClientFactory.CreateClient("GitHub");
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_id"] = _clientId!,
+            ["scope"] = "read:user user:email"
+        });
+
+        var response = await client.PostAsync("https://github.com/login/device/code", content);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        if (root.TryGetProperty("error", out var error))
+        {
+            var errorDescription = root.TryGetProperty("error_description", out var desc)
+                ? desc.GetString()
+                : error.GetString();
+            throw new InvalidOperationException($"GitHub device code error: {errorDescription}");
+        }
+
+        return new GitHubDeviceCodeInfo
+        {
+            DeviceCode = root.GetProperty("device_code").GetString()!,
+            UserCode = root.GetProperty("user_code").GetString()!,
+            VerificationUri = root.GetProperty("verification_uri").GetString()!,
+            ExpiresIn = root.GetProperty("expires_in").GetInt32(),
+            Interval = root.GetProperty("interval").GetInt32()
+        };
     }
 
     private static string GenerateState()

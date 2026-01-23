@@ -62,3 +62,26 @@ public class AuthProvidersResponse
     public bool Email { get; set; }
     public bool GitHub { get; set; }
 }
+
+public class GitHubDeviceCodeResponse
+{
+    public string ClientId { get; set; } = null!;
+    public string DeviceCode { get; set; } = null!;
+    public string UserCode { get; set; } = null!;
+    public string VerificationUri { get; set; } = null!;
+    public int ExpiresIn { get; set; }
+    public int Interval { get; set; }
+}
+
+public class GitHubDeviceTokenRequest
+{
+    [Required]
+    public string AccessToken { get; set; } = null!;
+    public string? MachineName { get; set; }
+}
+
+public class GitHubDeviceTokenResponse
+{
+    public string Token { get; set; } = null!;
+    public UserDto User { get; set; } = null!;
+}

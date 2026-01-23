@@ -2,6 +2,7 @@ import inquirer from "inquirer";
 import chalk from "chalk";
 import ora from "ora";
 import {
+  readConfig,
   writeConfig,
   getMachineId,
   generateEncryptionKey,
@@ -16,6 +17,7 @@ import {
   getAdapter,
   CliType,
 } from "../lib/hooks.js";
+import { loginCommand } from "./login.js";
 
 interface InitOptions {
   token?: string;
@@ -83,38 +85,48 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   console.log(chalk.dim(`Detected CLI tools: ${installedClis.map(c => getAdapter(c).displayName).join(", ")}\n`));
 
-  let token = options.token;
-  let apiUrl = options.url || "https://api.llmwhiteboard.com";
+  // Check if already authenticated
+  let existingConfig = await readConfig();
+  let token = options.token || existingConfig?.token;
+  let apiUrl = options.url || existingConfig?.apiUrl || "https://api.llmwhiteboard.com";
   let enableEncryption = options.enableEncryption || false;
 
-  // Get API token
+  // If not authenticated, trigger login flow
   if (!token) {
-    const answers = await inquirer.prompt([
-      {
-        type: "input",
-        name: "token",
-        message: "Enter your API token:",
-        validate: (input) => {
-          if (!input.startsWith("lwb_sk_")) {
-            return "Token should start with lwb_sk_";
-          }
-          return true;
-        },
-      },
-    ]);
-    token = answers.token;
+    console.log(chalk.yellow("You need to authenticate first.\n"));
+    await loginCommand({ url: apiUrl, machineId: options.machineId });
+
+    // Re-read config after login
+    existingConfig = await readConfig();
+    if (!existingConfig?.token) {
+      console.log(chalk.red("\nAuthentication failed. Please try again."));
+      process.exit(1);
+    }
+    token = existingConfig.token;
+    apiUrl = existingConfig.apiUrl || apiUrl;
   }
 
-  // Get API URL if not default
-  const urlAnswer = await inquirer.prompt([
+  // Ask if user wants to change API URL
+  const { changeUrl } = await inquirer.prompt([
     {
-      type: "input",
-      name: "apiUrl",
-      message: "API URL:",
-      default: apiUrl,
+      type: "confirm",
+      name: "changeUrl",
+      message: `Use API URL: ${apiUrl}?`,
+      default: true,
     },
   ]);
-  apiUrl = urlAnswer.apiUrl;
+
+  if (!changeUrl) {
+    const urlAnswer = await inquirer.prompt([
+      {
+        type: "input",
+        name: "apiUrl",
+        message: "Enter API URL:",
+        default: apiUrl,
+      },
+    ]);
+    apiUrl = urlAnswer.apiUrl;
+  }
 
   // Ask about encryption
   if (!options.enableEncryption) {

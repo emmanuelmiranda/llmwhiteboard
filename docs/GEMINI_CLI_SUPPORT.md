@@ -290,13 +290,19 @@ The implementation uses an adapter pattern to support multiple CLI tools. Key fi
 ### Usage
 
 ```bash
-# Initialize with auto-detection
+# Authenticate with GitHub (recommended)
+npx llmwhiteboard login
+
+# Authenticate with token manually
+npx llmwhiteboard login --token YOUR_TOKEN
+
+# Initialize with auto-detection (will prompt for login if needed)
 npx llmwhiteboard init
 
 # Initialize for specific CLI only
 npx llmwhiteboard init --cli gemini-cli
 
-# Reinstall hooks for all detected CLIs
+# Reinstall hooks for all detected CLIs (preserves existing config)
 npx llmwhiteboard init --hooks-only
 
 # Check status
