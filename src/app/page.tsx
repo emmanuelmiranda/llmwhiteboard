@@ -231,6 +231,9 @@ export default function LandingPage() {
               <div className="h-6 w-6 rounded bg-primary" />
               <span className="font-bold">LLM Whiteboard</span>
             </div>
+            <p className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} Fermpop, LLC. All rights reserved.
+            </p>
             <div className="flex items-center space-x-4">
               <a
                 href="https://github.com/emmanuelmiranda/llmwhiteboard"
