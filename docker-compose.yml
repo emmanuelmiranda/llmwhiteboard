@@ -44,6 +44,9 @@ services:
       Jwt__Audience: LlmWhiteboard
       Jwt__ExpiryInDays: 7
       Frontend__Url: https://llmwhiteboard.com
+      Auth__EmailEnabled: ${AUTH_EMAIL_ENABLED:-false}
+      GitHub__ClientId: ${GITHUB_CLIENT_ID:-}
+      GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

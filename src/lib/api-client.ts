@@ -57,6 +57,10 @@ class ApiClient {
   }
 
   // Auth
+  async getAuthProviders(): Promise<AuthProviders> {
+    return this.request<AuthProviders>("/api/auth/providers");
+  }
+
   async login(email: string, password: string) {
     const response = await this.request<{ token: string; user: User }>(
       "/api/auth/login",
@@ -83,6 +87,25 @@ class ApiClient {
 
   logout() {
     this.setToken(null);
+  }
+
+  // GitHub OAuth
+  async getGitHubAuthUrl(redirectUri: string): Promise<{ url: string; state: string }> {
+    return this.request<{ url: string; state: string }>(
+      `/api/auth/github/authorize?redirectUri=${encodeURIComponent(redirectUri)}`
+    );
+  }
+
+  async githubCallback(code: string, state: string, redirectUri: string): Promise<{ token: string; user: User }> {
+    const response = await this.request<{ token: string; user: User }>(
+      "/api/auth/github/callback",
+      {
+        method: "POST",
+        body: JSON.stringify({ code, state, redirectUri }),
+      }
+    );
+    this.setToken(response.token);
+    return response;
   }
 
   // Sessions
@@ -197,6 +220,11 @@ class ApiClient {
 }
 
 // Types
+interface AuthProviders {
+  email: boolean;
+  gitHub: boolean;
+}
+
 interface User {
   id: string;
   email: string;
@@ -294,6 +322,7 @@ interface SnapshotListResponse {
 
 export const apiClient = new ApiClient();
 export type {
+  AuthProviders,
   User,
   Session,
   SessionDetail,

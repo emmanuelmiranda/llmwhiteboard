@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<SessionEvent> SessionEvents => Set<SessionEvent>();
     public DbSet<SessionTranscript> SessionTranscripts => Set<SessionTranscript>();
     public DbSet<TranscriptSnapshot> TranscriptSnapshots => Set<TranscriptSnapshot>();
+    public DbSet<OAuthAccount> OAuthAccounts => Set<OAuthAccount>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,18 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(e => e.Email).IsUnique();
+        });
+
+        // OAuthAccount
+        modelBuilder.Entity<OAuthAccount>(entity =>
+        {
+            entity.HasIndex(e => new { e.Provider, e.ProviderAccountId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.OAuthAccounts)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ApiToken

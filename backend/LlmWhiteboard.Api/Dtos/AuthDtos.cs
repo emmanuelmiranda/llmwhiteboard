@@ -38,3 +38,27 @@ public class UserDto
     public string? Name { get; set; }
     public string? Image { get; set; }
 }
+
+public class GitHubAuthUrlResponse
+{
+    public string Url { get; set; } = null!;
+    public string State { get; set; } = null!;
+}
+
+public class GitHubCallbackRequest
+{
+    [Required]
+    public string Code { get; set; } = null!;
+
+    [Required]
+    public string State { get; set; } = null!;
+
+    [Required]
+    public string RedirectUri { get; set; } = null!;
+}
+
+public class AuthProvidersResponse
+{
+    public bool Email { get; set; }
+    public bool GitHub { get; set; }
+}

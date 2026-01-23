@@ -60,6 +60,71 @@ public class AuthService : IAuthService
         return await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
+    public async Task<User> FindOrCreateOAuthUserAsync(string provider, string providerAccountId, string email, string? name, string? avatarUrl)
+    {
+        // 1. Check if OAuthAccount exists → return linked user
+        var existingOAuth = await _db.OAuthAccounts
+            .Include(o => o.User)
+            .FirstOrDefaultAsync(o => o.Provider == provider && o.ProviderAccountId == providerAccountId);
+
+        if (existingOAuth != null)
+        {
+            // Update avatar if changed
+            if (avatarUrl != null && existingOAuth.User.Image != avatarUrl)
+            {
+                existingOAuth.User.Image = avatarUrl;
+                existingOAuth.User.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+            return existingOAuth.User;
+        }
+
+        // 2. Check if User exists with email → link OAuth account to existing user
+        var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+        if (existingUser != null)
+        {
+            var oauthAccount = new Models.OAuthAccount
+            {
+                UserId = existingUser.Id,
+                Provider = provider,
+                ProviderAccountId = providerAccountId
+            };
+            _db.OAuthAccounts.Add(oauthAccount);
+
+            // Update avatar if not set
+            if (existingUser.Image == null && avatarUrl != null)
+            {
+                existingUser.Image = avatarUrl;
+                existingUser.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _db.SaveChangesAsync();
+            return existingUser;
+        }
+
+        // 3. Create new User + OAuthAccount
+        var newUser = new Models.User
+        {
+            Email = email,
+            Name = name,
+            Image = avatarUrl,
+            EmailVerified = DateTime.UtcNow  // OAuth emails are verified by provider
+        };
+        _db.Users.Add(newUser);
+
+        var newOAuthAccount = new Models.OAuthAccount
+        {
+            UserId = newUser.Id,
+            Provider = provider,
+            ProviderAccountId = providerAccountId
+        };
+        _db.OAuthAccounts.Add(newOAuthAccount);
+
+        await _db.SaveChangesAsync();
+        return newUser;
+    }
+
     public string GenerateJwtToken(User user)
     {
         var key = _config["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");

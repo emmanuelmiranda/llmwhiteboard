@@ -56,6 +56,10 @@ builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddScoped<ISessionNotificationService, SessionNotificationService>();
 
+// GitHub OAuth
+builder.Services.AddHttpClient("GitHub");
+builder.Services.AddScoped<IGitHubOAuthService, GitHubOAuthService>();
+
 // SignalR
 builder.Services.AddSignalR();
 

@@ -16,6 +16,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => void;
+  loginWithGitHub: () => Promise<void>;
+  handleGitHubCallback: (code: string, state: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,8 +59,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/login");
   };
 
+  const loginWithGitHub = async () => {
+    const redirectUri = `${window.location.origin}/auth/github/callback`;
+    const { url, state } = await apiClient.getGitHubAuthUrl(redirectUri);
+
+    // Store state in sessionStorage for CSRF verification
+    sessionStorage.setItem("github_oauth_state", state);
+
+    // Redirect to GitHub authorization
+    window.location.href = url;
+  };
+
+  const handleGitHubCallback = async (code: string, state: string) => {
+    // Verify state matches (CSRF protection)
+    const storedState = sessionStorage.getItem("github_oauth_state");
+    if (state !== storedState) {
+      throw new Error("Invalid OAuth state. Please try logging in again.");
+    }
+
+    // Clear stored state
+    sessionStorage.removeItem("github_oauth_state");
+
+    const redirectUri = `${window.location.origin}/auth/github/callback`;
+    const response = await apiClient.githubCallback(code, state, redirectUri);
+    setUser(response.user);
+    localStorage.setItem("user", JSON.stringify(response.user));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, loginWithGitHub, handleGitHubCallback }}>
       {children}
     </AuthContext.Provider>
   );
