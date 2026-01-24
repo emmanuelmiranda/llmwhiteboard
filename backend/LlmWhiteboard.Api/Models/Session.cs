@@ -61,4 +61,5 @@ public class Session
     public ICollection<SessionEvent> Events { get; set; } = new List<SessionEvent>();
     public SessionTranscript? Transcript { get; set; }
     public ICollection<TranscriptSnapshot> Snapshots { get; set; } = new List<TranscriptSnapshot>();
+    public ICollection<ShareToken> ShareTokens { get; set; } = new List<ShareToken>();
 }

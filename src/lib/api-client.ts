@@ -217,6 +217,88 @@ class ApiClient {
       `/api/sessions/${sessionId}/snapshots`
     );
   }
+
+  // Shares
+  async createShare(data: CreateShareRequest) {
+    return this.request<CreateShareResponse>("/api/share", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getShares() {
+    return this.request<ShareListResponse>("/api/share");
+  }
+
+  async getSessionShares(sessionId: string) {
+    return this.request<ShareListResponse>(`/api/share/session/${sessionId}`);
+  }
+
+  async revokeShare(id: string) {
+    return this.request<{ success: boolean }>(`/api/share/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Public endpoints (no auth required, use share token)
+  async validateShareToken(token: string) {
+    return this.publicRequest<ValidateShareResponse>(
+      `/api/public/validate?token=${encodeURIComponent(token)}`
+    );
+  }
+
+  async getPublicFeed(token: string, limit?: number) {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", limit.toString());
+    return this.publicRequest<PublicSessionListResponse>(
+      `/api/public/feed?${params.toString()}`,
+      token
+    );
+  }
+
+  async getPublicSession(token: string, sessionId: string) {
+    return this.publicRequest<PublicSession>(
+      `/api/public/session/${sessionId}`,
+      token
+    );
+  }
+
+  async getPublicSessionEvents(
+    token: string,
+    sessionId: string,
+    params?: { limit?: number; offset?: number }
+  ) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+    return this.publicRequest<PublicEventsResponse>(
+      `/api/public/session/${sessionId}/events?${searchParams.toString()}`,
+      token
+    );
+  }
+
+  private async publicRequest<T>(endpoint: string, token?: string): Promise<T> {
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      (headers as Record<string, string>)["X-Share-Token"] = token;
+    }
+
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: `HTTP ${response.status}`,
+      }));
+      throw new Error(error.error || `Request failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
 
 // Types
@@ -320,6 +402,90 @@ interface SnapshotListResponse {
   snapshots: Snapshot[];
 }
 
+// Share types
+type ShareScope = "Session" | "UserFeed";
+type ShareVisibility = "Full" | "ActivityOnly";
+
+interface CreateShareRequest {
+  sessionId?: string;
+  scope: ShareScope;
+  visibility: ShareVisibility;
+  name?: string;
+  expiresAt?: string;
+  maxViewers?: number;
+}
+
+interface CreateShareResponse {
+  id: string;
+  token: string;
+  url: string;
+  message: string;
+}
+
+interface ShareToken {
+  id: string;
+  sessionId: string | null;
+  scope: string;
+  visibility: string;
+  tokenPrefix: string;
+  name: string | null;
+  expiresAt: string | null;
+  maxViewers: number | null;
+  isRevoked: boolean;
+  createdAt: string;
+  lastAccessedAt: string | null;
+  accessCount: number;
+}
+
+interface ShareListResponse {
+  shares: ShareToken[];
+}
+
+interface ValidateShareResponse {
+  valid: boolean;
+  scope?: string;
+  visibility?: string;
+  sessionId?: string;
+  userId?: string;
+  userName?: string;
+}
+
+interface PublicSession {
+  id: string;
+  title: string | null;
+  status: string;
+  cliType: string;
+  eventCount: number;
+  lastActivityAt: string;
+  createdAt: string;
+  projectPath?: string;
+  description?: string;
+  tags?: string[];
+  machineName?: string;
+}
+
+interface PublicEvent {
+  id: string;
+  sessionId: string;
+  eventType: string;
+  toolName: string | null;
+  createdAt: string;
+  summary?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface PublicSessionListResponse {
+  sessions: PublicSession[];
+  total: number;
+}
+
+interface PublicEventsResponse {
+  events: PublicEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export const apiClient = new ApiClient();
 export type {
   AuthProviders,
@@ -333,4 +499,15 @@ export type {
   Machine,
   Snapshot,
   SnapshotListResponse,
+  ShareScope,
+  ShareVisibility,
+  CreateShareRequest,
+  CreateShareResponse,
+  ShareToken,
+  ShareListResponse,
+  ValidateShareResponse,
+  PublicSession,
+  PublicEvent,
+  PublicSessionListResponse,
+  PublicEventsResponse,
 };

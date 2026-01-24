@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<SessionTranscript> SessionTranscripts => Set<SessionTranscript>();
     public DbSet<TranscriptSnapshot> TranscriptSnapshots => Set<TranscriptSnapshot>();
     public DbSet<OAuthAccount> OAuthAccounts => Set<OAuthAccount>();
+    public DbSet<ShareToken> ShareTokens => Set<ShareToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -123,6 +124,31 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.Property(e => e.Type)
+                .HasConversion<string>();
+        });
+
+        // ShareToken
+        modelBuilder.Entity<ShareToken>(entity =>
+        {
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => e.TokenPrefix);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.SessionId);
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.ShareTokens)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Session)
+                .WithMany(s => s.ShareTokens)
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Property(e => e.Scope)
+                .HasConversion<string>();
+
+            entity.Property(e => e.Visibility)
                 .HasConversion<string>();
         });
     }

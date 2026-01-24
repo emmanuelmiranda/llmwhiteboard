@@ -29,6 +29,7 @@ import {
   LogOut,
   HelpCircle,
   Menu,
+  Link2,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import type { User } from "@/lib/api-client";
@@ -43,6 +44,7 @@ const navItems = [
 const settingsItems = [
   { href: "/settings", label: "General", icon: Settings },
   { href: "/settings/tokens", label: "API Tokens", icon: Key },
+  { href: "/settings/shares", label: "Share Links", icon: Link2 },
   { href: "/settings/machines", label: "Machines", icon: Monitor },
 ];
 

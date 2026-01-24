@@ -52,6 +52,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IShareTokenService, ShareTokenService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddScoped<ISessionNotificationService, SessionNotificationService>();
@@ -137,11 +138,15 @@ app.UseCors("AllowFrontend");
 // Custom API Token authentication middleware (for CLI)
 app.UseMiddleware<ApiTokenAuthMiddleware>();
 
+// Share Token authentication middleware (for public share links)
+app.UseMiddleware<ShareTokenAuthMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
+app.MapHub<PublicSessionHub>("/hubs/public");
 
 // Apply database schema on startup
 using (var scope = app.Services.CreateScope())

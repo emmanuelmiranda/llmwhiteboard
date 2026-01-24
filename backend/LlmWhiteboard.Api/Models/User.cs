@@ -28,4 +28,5 @@ public class User
     public ICollection<ApiToken> ApiTokens { get; set; } = new List<ApiToken>();
     public ICollection<Machine> Machines { get; set; } = new List<Machine>();
     public ICollection<OAuthAccount> OAuthAccounts { get; set; } = new List<OAuthAccount>();
+    public ICollection<ShareToken> ShareTokens { get; set; } = new List<ShareToken>();
 }

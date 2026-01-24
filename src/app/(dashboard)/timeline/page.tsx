@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
-import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore, Square, Wrench, MessageSquare, Play, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
+import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore, Square, Wrench, MessageSquare, Play, RefreshCw, AlertCircle, ShieldAlert, Sparkles } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ActivityStats } from "@/components/activity-stats";
+import { SessionPixelProgress, TimelinePixelProgress } from "@/components/pixel-progress";
 
 interface TimelineSession {
   id: string;
@@ -210,6 +211,8 @@ export default function TimelinePage() {
   const [hoveredEventSessionId, setHoveredEventSessionId] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>("all");
+  const [showPixelProgress, setShowPixelProgress] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const { toast } = useToast();
   const {
     onSessionCreated,
@@ -255,7 +258,7 @@ export default function TimelinePage() {
     try {
       const [sessionsData, eventsData] = await Promise.all([
         apiClient.getSessions({ limit: 20 }),
-        apiClient.getEvents({ limit: 50 }),
+        apiClient.getEvents({ limit: 2000 }),
       ]);
 
       setSessions(sessionsData.sessions || []);
@@ -385,6 +388,47 @@ export default function TimelinePage() {
       <div className="p-3 rounded-lg border bg-card">
         <ActivityStats />
       </div>
+
+      {/* Pixel Progress Visualization Toggle */}
+      <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+        <div className="flex items-center gap-3">
+          <Sparkles className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">Session Visualization</p>
+            <p className="text-xs text-muted-foreground">Show pixel art progress for active sessions</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPixelProgress(!showPixelProgress)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${showPixelProgress ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+          >
+            {showPixelProgress ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
+
+      {/* Combined Pixel Progress Visualization */}
+      {showPixelProgress && (
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Combined Activity Visualization
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-2">
+            <div className="w-full max-w-lg mx-auto" style={{ aspectRatio: '1.6 / 1' }}>
+              <TimelinePixelProgress
+                events={events}
+                size="full"
+                soundEnabled={soundEnabled}
+                onSoundToggle={setSoundEnabled}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3 overflow-hidden">
         {/* Recent Sessions */}
@@ -603,7 +647,7 @@ export default function TimelinePage() {
                                   </Badge>
                                 ) : event.eventType === "user_prompt" ? (
                                   <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
-                                    User prompt
+                                    Prompt
                                   </Badge>
                                 ) : event.eventType === "permission_request" ? (
                                   <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">

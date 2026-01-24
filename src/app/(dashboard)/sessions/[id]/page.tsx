@@ -51,6 +51,8 @@ import { formatRelativeTime } from "@/lib/utils";
 import type { SessionStatus } from "@/types";
 import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
+import { ShareDialog } from "@/components/share-dialog";
+import { SessionPixelProgress } from "@/components/pixel-progress";
 
 interface SessionEvent {
   id: string;
@@ -145,6 +147,8 @@ export default function SessionDetailPage({
   const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
   // Glowing events for real-time updates
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
+  // Sound toggle for pixel progress
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
   const {
@@ -519,6 +523,10 @@ export default function SessionDetailPage({
         </div>
         <div className="flex items-center space-x-2 flex-shrink-0">
           <ConnectionStatus />
+          <ShareDialog
+            sessionId={session.id}
+            sessionTitle={session.title || undefined}
+          />
           <Button
             variant="outline"
             size="icon"
@@ -860,6 +868,27 @@ export default function SessionDetailPage({
         </div>
 
         <div className="space-y-6">
+          {/* Pixel Progress Visualization */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center text-base">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Session Visualization
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Responsive container - scales down on small screens while maintaining 1.6:1 aspect ratio */}
+              <div className="w-full max-w-[256px] mx-auto" style={{ aspectRatio: '1.6 / 1' }}>
+                <SessionPixelProgress
+                  sessionId={session.id}
+                  size="full"
+                  soundEnabled={soundEnabled}
+                  onSoundToggle={setSoundEnabled}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Info</CardTitle>
