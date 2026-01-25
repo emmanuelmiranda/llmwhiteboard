@@ -374,6 +374,8 @@ export class SoundEngine {
   // INITIALIZATION
   // ===========================================================================
 
+  private isUnlockListenerAttached: boolean = false
+
   init(): void {
     if (this.audioContext) {
       console.log('[SoundEngine] Already initialized, state:', this.audioContext.state)
@@ -386,9 +388,44 @@ export class SoundEngine {
       this.masterGain.gain.value = this.config.masterVolume
       this.masterGain.connect(this.audioContext.destination)
       console.log('[SoundEngine] Initialized, state:', this.audioContext.state, 'volume:', this.config.masterVolume)
+
+      // Set up iOS/Safari unlock listeners
+      this.setupUnlockListeners()
     } catch (e) {
       console.warn('[SoundEngine] Web Audio API not supported:', e)
     }
+  }
+
+  /**
+   * Set up event listeners to unlock AudioContext on user interaction.
+   * This is required for iOS Safari and other browsers that suspend AudioContext.
+   */
+  private setupUnlockListeners(): void {
+    if (this.isUnlockListenerAttached || typeof document === 'undefined') return
+    if (!this.audioContext) return
+
+    const events = ['touchstart', 'touchend', 'mousedown', 'keydown']
+
+    const unlock = () => {
+      console.log('[SoundEngine] Unlock triggered by user interaction')
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        this.audioContext.resume().then(() => {
+          console.log('[SoundEngine] AudioContext resumed successfully, state:', this.audioContext?.state)
+        }).catch(err => {
+          console.warn('[SoundEngine] Failed to resume AudioContext:', err)
+        })
+      }
+
+      // Only remove listeners after context is running
+      if (this.audioContext?.state === 'running') {
+        console.log('[SoundEngine] Removing unlock listeners')
+        events.forEach(e => document.body.removeEventListener(e, unlock, false))
+      }
+    }
+
+    events.forEach(e => document.body.addEventListener(e, unlock, false))
+    this.isUnlockListenerAttached = true
+    console.log('[SoundEngine] Unlock listeners attached')
   }
 
   async resume(): Promise<void> {
@@ -396,6 +433,27 @@ export class SoundEngine {
       console.log('[SoundEngine] Resuming suspended AudioContext...')
       await this.audioContext.resume()
       console.log('[SoundEngine] Resumed, new state:', this.audioContext.state)
+    }
+  }
+
+  /**
+   * Force unlock for iOS - call this directly in a touch/click handler.
+   * Note: On iOS, if the physical silent/mute switch is ON, no Web Audio will play.
+   */
+  unlockAudio(): void {
+    console.log('[SoundEngine] unlockAudio called, current state:', this.audioContext?.state)
+
+    // Create context if needed
+    if (!this.audioContext) {
+      this.init()
+    }
+
+    // Resume if suspended
+    if (this.audioContext?.state === 'suspended') {
+      console.log('[SoundEngine] Calling resume() on suspended context')
+      this.audioContext.resume().then(() => {
+        console.log('[SoundEngine] Resume complete, state:', this.audioContext?.state)
+      })
     }
   }
 
@@ -474,25 +532,27 @@ export class SoundEngine {
    * Play a test note with the current configured synth
    */
   playTestNote(noteName: string = 'E4'): void {
-    if (!this.isEnabled()) {
-      // For test notes, temporarily enable
-      const wasEnabled = this.config.enabled
+    // For test notes, temporarily enable if needed
+    const wasEnabled = this.config.enabled
+    if (!wasEnabled) {
       this.config.enabled = true
-      this.init()
-      this.resume().then(() => {
-        const frequency = SCALE_FREQUENCIES[noteName] ?? SCALE_FREQUENCIES.E4
-        const patch = this.buildPatchFromConfig()
-        this.playSynthNote(frequency, patch)
-        if (!wasEnabled) {
-          this.config.enabled = false
-        }
-      })
-      return
     }
+
+    // iOS: All audio operations must happen synchronously during user gesture
+    // Don't use .then() - just call everything directly
+    this.init()
+    this.resume() // Don't await - just kick off the resume
 
     const frequency = SCALE_FREQUENCIES[noteName] ?? SCALE_FREQUENCIES.E4
     const patch = this.buildPatchFromConfig()
     this.playSynthNote(frequency, patch)
+
+    // Restore enabled state after a brief delay (after sound has started)
+    if (!wasEnabled) {
+      setTimeout(() => {
+        this.config.enabled = false
+      }, 100)
+    }
   }
 
   /**
@@ -736,6 +796,13 @@ export class SoundEngine {
     if (!this.audioContext || !this.masterGain) {
       console.warn('[SoundEngine] playSynthNote: No audio context or master gain')
       return
+    }
+
+    // Try to resume if suspended (belt-and-suspenders for iOS)
+    // This won't work outside a user gesture but doesn't hurt to try
+    if (this.audioContext.state === 'suspended') {
+      console.log('[SoundEngine] playSynthNote: Context suspended, attempting resume')
+      this.audioContext.resume()
     }
 
     const ctx = this.audioContext

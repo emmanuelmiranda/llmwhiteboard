@@ -28,8 +28,8 @@
  */
 
 // Main component
-export { PixelProgress, SessionPixelProgress, useSessionPixelProgress, TimelinePixelProgress } from './components'
-export type { PixelProgressProps, SessionPixelProgressProps, TimelinePixelProgressProps } from './components'
+export { PixelProgress, SessionPixelProgress, useSessionPixelProgress, TimelinePixelProgress, PublicSessionPixelProgress } from './components'
+export type { PixelProgressProps, SessionPixelProgressProps, TimelinePixelProgressProps, PublicSessionPixelProgressProps } from './components'
 
 // Hooks
 export { usePixelProgress } from './hooks'

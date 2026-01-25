@@ -31,14 +31,11 @@ public class ShareToken
 
     public ShareVisibility Visibility { get; set; } = ShareVisibility.Full;
 
-    [Required]
-    public string TokenHash { get; set; } = null!;
-
     /// <summary>
-    /// First 12 characters of the token for lookup optimization
+    /// The full share token (stored plaintext since share links are meant to be shared)
     /// </summary>
     [Required]
-    public string TokenPrefix { get; set; } = null!;
+    public string Token { get; set; } = null!;
 
     /// <summary>
     /// Optional friendly name for the share

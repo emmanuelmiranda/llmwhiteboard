@@ -30,8 +30,8 @@ public class ShareTokenAuthMiddleware
 
                 if (shareToken != null)
                 {
-                    // Record access (fire and forget to not block request)
-                    _ = shareTokenService.RecordAccessAsync(shareToken.Id);
+                    // Record access
+                    await shareTokenService.RecordAccessAsync(shareToken.Id);
 
                     var claims = new List<Claim>
                     {

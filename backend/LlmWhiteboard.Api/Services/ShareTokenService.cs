@@ -39,8 +39,6 @@ public class ShareTokenService : IShareTokenService
         // Generate token
         var randomBytes = RandomNumberGenerator.GetBytes(32);
         var token = $"{TokenPrefix}{Convert.ToHexString(randomBytes).ToLower()}";
-        var prefix = token[..12];
-        var tokenHash = BCrypt.Net.BCrypt.HashPassword(token, 10);
 
         var shareToken = new ShareToken
         {
@@ -48,8 +46,7 @@ public class ShareTokenService : IShareTokenService
             SessionId = request.Scope == ShareScope.Session ? request.SessionId : null,
             Scope = request.Scope,
             Visibility = request.Visibility,
-            TokenHash = tokenHash,
-            TokenPrefix = prefix,
+            Token = token,
             Name = request.Name,
             ExpiresAt = request.ExpiresAt,
             MaxViewers = request.MaxViewers
@@ -66,28 +63,20 @@ public class ShareTokenService : IShareTokenService
         if (!token.StartsWith(TokenPrefix))
             return null;
 
-        var prefix = token[..12];
-
-        var shareTokens = await _db.ShareTokens
+        var shareToken = await _db.ShareTokens
             .Include(t => t.User)
-            .Where(t => t.TokenPrefix == prefix && t.RevokedAt == null)
-            .ToListAsync();
+            .FirstOrDefaultAsync(t => t.Token == token && t.RevokedAt == null);
 
-        foreach (var shareToken in shareTokens)
+        if (shareToken == null)
+            return null;
+
+        // Check expiry
+        if (shareToken.ExpiresAt.HasValue && shareToken.ExpiresAt.Value < DateTime.UtcNow)
         {
-            if (BCrypt.Net.BCrypt.Verify(token, shareToken.TokenHash))
-            {
-                // Check expiry
-                if (shareToken.ExpiresAt.HasValue && shareToken.ExpiresAt.Value < DateTime.UtcNow)
-                {
-                    return null;
-                }
-
-                return shareToken;
-            }
+            return null;
         }
 
-        return null;
+        return shareToken;
     }
 
     public async Task<List<ShareToken>> GetUserSharesAsync(string userId)

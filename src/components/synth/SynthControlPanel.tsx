@@ -138,10 +138,9 @@ const KEYBOARD_LAYOUT = [
 function MiniKeyboard() {
   const playNote = useCallback((noteName: string) => {
     const soundEngine = getSoundEngine()
-    soundEngine.init()
-    soundEngine.resume().then(() => {
-      soundEngine.playTestNote(noteName)
-    })
+    // iOS: Must unlock audio first during user gesture
+    soundEngine.unlockAudio()
+    soundEngine.playTestNote(noteName)
   }, [])
 
   return (
@@ -154,7 +153,8 @@ function MiniKeyboard() {
             <button
               key={key.white}
               onMouseDown={() => playNote(key.white)}
-              className="flex-1 bg-white border border-border rounded-b text-[6px] text-gray-400 flex items-end justify-center pb-0.5 hover:bg-gray-100 active:bg-gray-300 transition-colors"
+              onTouchStart={(e) => { e.preventDefault(); playNote(key.white) }}
+              className="flex-1 bg-white border border-border rounded-b text-[6px] text-gray-400 flex items-end justify-center pb-0.5 hover:bg-gray-100 active:bg-gray-300 transition-colors touch-none"
             >
               {key.white.replace(/[0-9]/g, '')}
             </button>
@@ -169,7 +169,8 @@ function MiniKeyboard() {
               <div key={key.black} className="flex-1 flex justify-end">
                 <button
                   onMouseDown={() => playNote(key.black!)}
-                  className="w-[60%] h-full bg-gray-800 border border-gray-900 rounded-b text-[5px] text-gray-400 hover:bg-gray-700 active:bg-gray-600 transition-colors pointer-events-auto -mr-[30%] z-10"
+                  onTouchStart={(e) => { e.preventDefault(); playNote(key.black!) }}
+                  className="w-[60%] h-full bg-gray-800 border border-gray-900 rounded-b text-[5px] text-gray-400 hover:bg-gray-700 active:bg-gray-600 transition-colors pointer-events-auto -mr-[30%] z-10 touch-none"
                 />
               </div>
             )
@@ -240,19 +241,15 @@ export function SynthControlPanel({
   // Play test note
   const playTestNote = useCallback(() => {
     const soundEngine = getSoundEngine()
-    soundEngine.init()
-    soundEngine.resume().then(() => {
-      soundEngine.playTestNote('E4')
-    })
+    soundEngine.unlockAudio()
+    soundEngine.playTestNote('E4')
   }, [])
 
   // Play test sequence
   const playTestSequence = useCallback(() => {
     const soundEngine = getSoundEngine()
-    soundEngine.init()
-    soundEngine.resume().then(() => {
-      soundEngine.playTestSequence()
-    })
+    soundEngine.unlockAudio()
+    soundEngine.playTestSequence()
   }, [])
 
   // Reset to defaults

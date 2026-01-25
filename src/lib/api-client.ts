@@ -422,12 +422,12 @@ interface CreateShareResponse {
   message: string;
 }
 
-interface ShareToken {
+export interface ShareToken {
   id: string;
   sessionId: string | null;
   scope: string;
   visibility: string;
-  tokenPrefix: string;
+  token: string;
   name: string | null;
   expiresAt: string | null;
   maxViewers: number | null;
@@ -503,7 +503,6 @@ export type {
   ShareVisibility,
   CreateShareRequest,
   CreateShareResponse,
-  ShareToken,
   ShareListResponse,
   ValidateShareResponse,
   PublicSession,

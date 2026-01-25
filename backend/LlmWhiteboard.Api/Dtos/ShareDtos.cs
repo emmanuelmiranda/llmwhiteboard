@@ -43,7 +43,7 @@ public class ShareTokenDto
     public string? SessionId { get; set; }
     public string Scope { get; set; } = null!;
     public string Visibility { get; set; } = null!;
-    public string TokenPrefix { get; set; } = null!;
+    public string Token { get; set; } = null!;
     public string? Name { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public int? MaxViewers { get; set; }

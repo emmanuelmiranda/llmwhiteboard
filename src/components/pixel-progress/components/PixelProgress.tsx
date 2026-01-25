@@ -16,6 +16,7 @@ import type {
 } from '../types'
 import { SIZE_PRESETS, type SizePreset } from '../constants'
 import { getTheme } from '../themes'
+import { getSoundEngine } from '../core/SoundEngine'
 import { SynthControlPanel } from '@/components/synth'
 
 // =============================================================================
@@ -570,7 +571,12 @@ export function PixelProgress({
           {/* Sound toggle button */}
           {onSoundToggle && (
             <button
-              onClick={() => onSoundToggle(!soundEnabled)}
+              onClick={() => {
+                // iOS Safari requires AudioContext unlock during user gesture
+                const engine = getSoundEngine()
+                engine.unlockAudio()
+                onSoundToggle(!soundEnabled)
+              }}
               style={{
                 width: '24px',
                 height: '20px',

@@ -16,13 +16,6 @@ import {
   Folder,
   Clock,
   Activity,
-  MessageSquare,
-  Wrench,
-  ChevronRight,
-  ChevronDown,
-  Play,
-  Square,
-  Zap,
   Sparkles,
   Bot,
   Eye,
@@ -30,6 +23,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
+import { PublicSessionPixelProgress } from "@/components/pixel-progress";
+import { EventTimeline, type BaseEvent } from "@/components/events";
 
 const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
   "claude-code": {
@@ -67,6 +62,7 @@ function PublicSessionView({
   const [error, setError] = useState<string | null>(null);
   const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   const { onSessionUpdated, onNewEvent, joinSession, leaveSession, connectionState } =
     usePublicSignalRContext();
@@ -235,111 +231,55 @@ function PublicSessionView({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {events.length === 0 && !eventsLoading ? (
-                <p className="text-muted-foreground text-center py-4">No events recorded yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {events.map((event) => {
-                    const isGlowing = glowingEventIds.has(event.id);
-                    const isUserPrompt = event.eventType === "user_prompt";
-                    const isToolUse = event.eventType === "tool_use";
-                    const isCompaction = event.eventType === "compaction";
-                    const isStop = event.eventType === "stop" || event.eventType === "session_end";
-
-                    if (isCompaction) {
-                      return (
-                        <div
-                          key={event.id}
-                          className={`border border-amber-300 dark:border-amber-700 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 ${isGlowing ? "ring-2 ring-green-500 ring-opacity-50" : ""}`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <Zap className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                            <div className="flex-1">
-                              <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                                Context Compaction
-                              </span>
-                              {isFullVisibility && event.summary && (
-                                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                                  {event.summary}
-                                </p>
-                              )}
-                            </div>
-                            <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                              {formatRelativeTime(new Date(event.createdAt))}
-                            </span>
-                          </div>
-                        </div>
-                      );
+              <EventTimeline
+                events={events as BaseEvent[]}
+                eventsTotal={eventsTotal}
+                eventsLoading={eventsLoading}
+                glowingEventIds={glowingEventIds}
+                expandedBlocks={expandedBlocks}
+                onToggleBlock={(blockId) => {
+                  setExpandedBlocks(prev => {
+                    const next = new Set(prev);
+                    if (next.has(blockId)) {
+                      next.delete(blockId);
+                    } else {
+                      next.add(blockId);
                     }
-
-                    const EventIcon = isUserPrompt
-                      ? MessageSquare
-                      : isToolUse
-                      ? Wrench
-                      : isStop
-                      ? Square
-                      : Activity;
-
-                    const iconColor = isUserPrompt
-                      ? "text-blue-500"
-                      : isToolUse
-                      ? "text-orange-500"
-                      : isStop
-                      ? "text-gray-500"
-                      : "text-muted-foreground";
-
-                    return (
-                      <div
-                        key={event.id}
-                        className={`flex items-start space-x-3 p-3 border rounded-lg ${
-                          isUserPrompt ? "bg-blue-50 dark:bg-blue-950/30" : ""
-                        } ${isGlowing ? "ring-2 ring-green-500 ring-opacity-50" : ""}`}
-                      >
-                        <EventIcon className={`h-4 w-4 mt-0.5 ${iconColor} flex-shrink-0`} />
-                        <div className="flex-1 min-w-0">
-                          {isUserPrompt ? (
-                            <p className="text-sm text-foreground">
-                              {isFullVisibility ? event.summary || "User prompt" : "User prompt"}
-                            </p>
-                          ) : isStop ? (
-                            <p className="text-sm text-foreground">
-                              {event.eventType === "session_end" ? "Session ended" : "Session paused"}
-                              {isFullVisibility && event.summary && ` - ${event.summary}`}
-                            </p>
-                          ) : (
-                            <>
-                              <Badge variant="outline" className="text-xs">
-                                {event.toolName || event.eventType}
-                              </Badge>
-                              {isFullVisibility && event.summary && (
-                                <p className="text-sm text-muted-foreground mt-1">{event.summary}</p>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                          {formatRelativeTime(new Date(event.createdAt))}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {events.length < eventsTotal && (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => loadEvents(events.length, true)}
-                      disabled={eventsLoading}
-                    >
-                      {eventsLoading ? "Loading..." : `Load More (${eventsTotal - events.length} remaining)`}
-                    </Button>
-                  )}
-                </div>
-              )}
+                    return next;
+                  });
+                }}
+                onLoadMore={() => loadEvents(events.length, true)}
+                hasMore={events.length < eventsTotal}
+                showFullDetails={isFullVisibility}
+                groupIntoBlocks={true}
+              />
             </CardContent>
           </Card>
         </div>
 
         <div className="space-y-6">
+          {/* Pixel Progress Animation */}
+          {shareInfo.sessionId && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Session Progress</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <PublicSessionPixelProgress
+                  token={token}
+                  sessionId={shareInfo.sessionId}
+                  theme="lego"
+                  size="sm"
+                  soundEnabled={soundEnabled}
+                  onSoundToggle={setSoundEnabled}
+                  soundVolume={0.3}
+                  showProgress={true}
+                  expandable={true}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Info</CardTitle>

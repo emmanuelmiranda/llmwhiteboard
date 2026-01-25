@@ -276,22 +276,10 @@ export function usePixelProgress(
     soundEngine.setEnabled(soundEnabled)
     soundEngine.setVolume(soundVolume)
 
-    // Initialize and resume AudioContext when sound is enabled
-    // This must happen during/after a user gesture (clicking the sound button)
-    if (soundEnabled) {
-      console.log('[usePixelProgress] Sound enabled, initializing audio context...')
-      soundEngine.init()
-      soundEngine.resume().then(() => {
-        // Play a confirmation sound so user knows sound is working
-        // This also helps "warm up" the audio context
-        console.log('[usePixelProgress] AudioContext resumed, playing confirmation sound')
-        soundEngine.play('place')
-      }).catch((err) => {
-        console.error('[usePixelProgress] Failed to resume AudioContext:', err)
-      })
-    } else {
-      console.log('[usePixelProgress] Sound disabled')
-    }
+    // Note: On iOS, AudioContext must be initialized/resumed during a user gesture
+    // The actual init/resume happens in the sound toggle button's onClick handler
+    // This effect just updates the enabled state and volume
+    console.log('[usePixelProgress] Sound config updated, enabled:', soundEnabled, 'volume:', soundVolume)
   }, [soundEnabled, soundVolume])
 
   const processEvent = useCallback((event: ProgressEvent) => {

@@ -9,10 +9,12 @@ export { BaseTheme, registerTheme, getTheme, getThemeIds, getAllThemeManifests }
 // Import themes to register them
 import './painter/PainterTheme'
 import './lego/LegoTheme'
+import './garden/GardenTheme'
 
 // Re-export theme classes for direct use
 export { PainterTheme } from './painter/PainterTheme'
 export { LegoTheme } from './lego/LegoTheme'
+export { GardenTheme } from './garden/GardenTheme'
 
 // Convenience function to get a random theme
 export function getRandomThemeId(): string {

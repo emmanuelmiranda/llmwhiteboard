@@ -130,8 +130,7 @@ public class AppDbContext : DbContext
         // ShareToken
         modelBuilder.Entity<ShareToken>(entity =>
         {
-            entity.HasIndex(e => e.TokenHash).IsUnique();
-            entity.HasIndex(e => e.TokenPrefix);
+            entity.HasIndex(e => e.Token).IsUnique();
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.SessionId);
 

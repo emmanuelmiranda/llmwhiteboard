@@ -36,13 +36,6 @@ import {
   History,
   GitBranch,
   Check,
-  MessageSquare,
-  Wrench,
-  Square,
-  Play,
-  ChevronRight,
-  ChevronDown,
-  Zap,
   Sparkles,
   Bot,
   Download,
@@ -53,6 +46,7 @@ import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ShareDialog } from "@/components/share-dialog";
 import { SessionPixelProgress } from "@/components/pixel-progress";
+import { EventTimeline, type BaseEvent } from "@/components/events";
 
 interface SessionEvent {
   id: string;
@@ -613,256 +607,28 @@ export default function SessionDetailPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {events.length === 0 && !eventsLoading ? (
-                <p className="text-muted-foreground text-center py-4">
-                  No events recorded yet
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {(() => {
-                    // Group events into session blocks and compaction events
-                    type BlockType =
-                      | { type: "session"; startEvent: SessionEvent; events: SessionEvent[]; stopEvent?: SessionEvent }
-                      | { type: "compaction"; event: SessionEvent };
-
-                    const blocks: BlockType[] = [];
-                    let currentBlock: { type: "session"; startEvent: SessionEvent; events: SessionEvent[]; stopEvent?: SessionEvent } | null = null;
-
-                    // Events are in reverse chronological order, so process accordingly
-                    const reversedEvents = [...events].reverse();
-
-                    for (const event of reversedEvents) {
-                      if (event.eventType === "compaction") {
-                        // Compaction is always its own block
-                        if (currentBlock) {
-                          blocks.push(currentBlock);
-                          currentBlock = null;
-                        }
-                        blocks.push({ type: "compaction", event });
-                      } else if (event.eventType === "session_start") {
-                        if (currentBlock) {
-                          blocks.push(currentBlock);
-                        }
-                        currentBlock = { type: "session", startEvent: event, events: [] };
-                      } else if (event.eventType === "stop" || event.eventType === "session_end") {
-                        if (currentBlock) {
-                          currentBlock.stopEvent = event;
-                          blocks.push(currentBlock);
-                          currentBlock = null;
-                        } else {
-                          // Orphan stop event
-                          blocks.push({ type: "session", startEvent: event, events: [], stopEvent: event });
-                        }
-                      } else if (currentBlock) {
-                        currentBlock.events.push(event);
-                      } else {
-                        // Events before any session_start - create implicit block
-                        currentBlock = { type: "session", startEvent: event, events: [event] };
-                      }
+              <EventTimeline
+                events={events as BaseEvent[]}
+                eventsTotal={eventsTotal}
+                eventsLoading={eventsLoading}
+                glowingEventIds={glowingEventIds}
+                expandedBlocks={expandedBlocks}
+                onToggleBlock={(blockId) => {
+                  setExpandedBlocks(prev => {
+                    const next = new Set(prev);
+                    if (next.has(blockId)) {
+                      next.delete(blockId);
+                    } else {
+                      next.add(blockId);
                     }
-                    if (currentBlock) {
-                      blocks.push(currentBlock);
-                    }
-
-                    // Reverse to show newest first
-                    blocks.reverse();
-
-                    return blocks.map((block, blockIndex) => {
-                      // Render compaction blocks separately
-                      if (block.type === "compaction") {
-                        const isGlowing = glowingEventIds.has(block.event.id);
-                        return (
-                          <div
-                            key={block.event.id}
-                            className={`border border-amber-300 dark:border-amber-700 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 ${isGlowing ? "realtime-glow" : ""}`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <Zap className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                              <div className="flex-1">
-                                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                                  Context Compaction
-                                </span>
-                                {block.event.summary && (
-                                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                                    {block.event.summary}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                                {formatRelativeTime(new Date(block.event.createdAt))}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      // Render session blocks
-                      const blockId = block.startEvent.id;
-                      const isExpanded = expandedBlocks.has(blockId);
-                      const userPrompts = block.events.filter(e => e.eventType === "user_prompt");
-                      const promptCount = userPrompts.length;
-                      const toolCount = block.events.filter(e => e.eventType === "tool_use").length;
-                      const startTime = new Date(block.startEvent.createdAt);
-                      const firstPrompt = userPrompts[0];
-
-                      // Check if any event in the block is glowing
-                      const hasGlowingEvent = block.events.some(e => glowingEventIds.has(e.id)) ||
-                        glowingEventIds.has(block.startEvent.id) ||
-                        (block.stopEvent && glowingEventIds.has(block.stopEvent.id));
-
-                      const toggleBlock = () => {
-                        setExpandedBlocks(prev => {
-                          const next = new Set(prev);
-                          if (next.has(blockId)) {
-                            next.delete(blockId);
-                          } else {
-                            next.add(blockId);
-                          }
-                          return next;
-                        });
-                      };
-
-                      return (
-                        <div key={blockId} className={`border rounded-lg overflow-hidden ${hasGlowingEvent ? "realtime-glow" : ""}`}>
-                          <button
-                            onClick={toggleBlock}
-                            className="w-full flex items-center space-x-3 p-3 hover:bg-muted/50 transition-colors text-left"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            )}
-                            {block.stopEvent && block.events.length === 0 ? (
-                              <Square className={`h-4 w-4 flex-shrink-0 ${block.stopEvent.eventType === "session_end" ? "text-red-500" : "text-gray-500"}`} />
-                            ) : (
-                              <Play className="h-4 w-4 text-green-500 flex-shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center space-x-2 flex-wrap gap-1">
-                                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                  {formatRelativeTime(startTime)}
-                                </span>
-                                {promptCount > 1 && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    +{promptCount - 1} more
-                                  </Badge>
-                                )}
-                                {toolCount > 0 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {toolCount} tool{toolCount !== 1 ? "s" : ""}
-                                  </Badge>
-                                )}
-                              </div>
-                              {block.stopEvent && block.events.length === 0 ? (
-                                <p className="text-sm text-foreground mt-1">
-                                  {block.stopEvent.eventType === "session_end" ? "Session ended" : "Session paused"}{block.stopEvent.summary ? ` - ${block.stopEvent.summary}` : ""}
-                                </p>
-                              ) : firstPrompt ? (
-                                <p className="text-sm text-foreground mt-1">
-                                  {firstPrompt.summary || "User prompt"}
-                                </p>
-                              ) : null}
-                            </div>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
-                              {block.events.map((event) => {
-                                const isUserPrompt = event.eventType === "user_prompt";
-                                const isToolUse = event.eventType === "tool_use";
-
-                                const EventIcon = isUserPrompt
-                                  ? MessageSquare
-                                  : isToolUse
-                                  ? Wrench
-                                  : Activity;
-
-                                const iconColor = isUserPrompt
-                                  ? "text-blue-500"
-                                  : isToolUse
-                                  ? "text-orange-500"
-                                  : "text-muted-foreground";
-
-                                return (
-                                  <div
-                                    key={event.id}
-                                    className={`flex items-start space-x-3 text-sm ${
-                                      isUserPrompt ? "bg-blue-50 dark:bg-blue-950/30 -mx-1 px-2 py-2 rounded-md" : ""
-                                    }`}
-                                  >
-                                    <EventIcon className={`h-4 w-4 mt-0.5 ${iconColor} flex-shrink-0`} />
-                                    <div className="flex-1 min-w-0">
-                                      {isUserPrompt ? (
-                                        <p className="text-foreground">
-                                          {event.summary || "User prompt"}
-                                        </p>
-                                      ) : (
-                                        <>
-                                          <Badge variant="outline" className="text-xs">
-                                            {event.toolName || event.eventType}
-                                          </Badge>
-                                          {event.summary && (
-                                            <p className="text-muted-foreground mt-1 truncate">
-                                              {event.summary}
-                                            </p>
-                                          )}
-                                          {isToolUse && event.metadata?.input && (
-                                            <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-32 overflow-y-auto">
-                                              {JSON.stringify(event.metadata.input, null, 2)}
-                                            </pre>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                                      {formatRelativeTime(new Date(event.createdAt))}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {block.events.length === 0 && !block.stopEvent && (
-                                <p className="text-sm text-muted-foreground text-center py-2">
-                                  No events in this session block
-                                </p>
-                              )}
-                              {/* Show stop event at the end */}
-                              {block.stopEvent && (
-                                <div className="flex items-start space-x-3 text-sm bg-gray-50 dark:bg-gray-900/30 -mx-1 px-2 py-2 rounded-md mt-2 border-t pt-3">
-                                  <Square className={`h-4 w-4 mt-0.5 flex-shrink-0 ${block.stopEvent.eventType === "session_end" ? "text-red-500" : "text-gray-500"}`} />
-                                  <div className="flex-1 min-w-0">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                                      {block.stopEvent.eventType === "session_end" ? "Session ended" : "Session paused"}
-                                    </span>
-                                    {block.stopEvent.summary && (
-                                      <p className="text-muted-foreground mt-0.5">
-                                        {block.stopEvent.summary}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                                    {formatRelativeTime(new Date(block.stopEvent.createdAt))}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    });
-                  })()}
-                  {events.length < eventsTotal && (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => loadEvents(events.length, true)}
-                      disabled={eventsLoading}
-                    >
-                      {eventsLoading ? "Loading..." : `Load More (${eventsTotal - events.length} remaining)`}
-                    </Button>
-                  )}
-                </div>
-              )}
+                    return next;
+                  });
+                }}
+                onLoadMore={() => loadEvents(events.length, true)}
+                hasMore={events.length < eventsTotal}
+                showFullDetails={true}
+                groupIntoBlocks={true}
+              />
             </CardContent>
           </Card>
         </div>

@@ -81,20 +81,23 @@ public class PublicSessionHub : Hub
     }
 
     /// <summary>
-    /// Subscribe to a specific session (only valid for UserFeed scope)
+    /// Subscribe to a specific session.
+    /// For Session scope: silently ignored (already joined on connect)
+    /// For UserFeed scope: joins the specific session group
     /// </summary>
     public async Task JoinSession(string sessionId)
     {
         var scope = GetShareScope();
-        var shareUserId = GetShareUserId();
+        var shareSessionId = GetShareSessionId();
 
-        // Only UserFeed scope can join individual sessions
-        if (scope != ShareScope.UserFeed)
+        // Session scope shares are already joined to their session on connect
+        if (scope == ShareScope.Session)
         {
-            throw new HubException("Cannot join sessions with Session scope share");
+            // Silently ignore - already in the right group
+            return;
         }
 
-        // Add to session-specific public group (we'll verify ownership when broadcasting)
+        // UserFeed scope can join individual sessions
         await Groups.AddToGroupAsync(Context.ConnectionId, $"public:session:{sessionId}");
     }
 

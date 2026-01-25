@@ -107,6 +107,7 @@ const SCENARIOS: Record<string, Omit<ProgressEvent, 'id' | 'timestamp'>[]> = {
 const AVAILABLE_THEMES = [
   { id: 'lego', name: 'LEGO Builder' },
   { id: 'painter', name: 'Pixel Painter' },
+  { id: 'garden', name: 'Zen Garden' },
 ]
 
 export default function PixelProgressDemoPage() {
@@ -116,6 +117,7 @@ export default function PixelProgressDemoPage() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [sessionKey, setSessionKey] = useState(0)
+  const [soundEnabled, setSoundEnabled] = useState(false)
 
   const timeoutRefs = useRef<NodeJS.Timeout[]>([])
 
@@ -285,6 +287,8 @@ export default function PixelProgressDemoPage() {
               expandable
               showControls
               showProgress
+              soundEnabled={soundEnabled}
+              onSoundToggle={setSoundEnabled}
               onComplete={(construction, stats) => {
                 console.log('Complete!', { construction, stats })
               }}

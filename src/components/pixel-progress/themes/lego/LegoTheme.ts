@@ -715,6 +715,14 @@ export class LegoTheme extends BaseTheme {
     _animationProgress: number,
     bubble?: { text: string; style: 'working' | 'waiting' | 'done' | 'fading' } | null
   ): void => {
+    // Stop compaction shake if session is complete (indicated by 'done' bubble style)
+    // or if we're back to working state (new activity has started)
+    if (this.isCompacting) {
+      if (bubble?.style === 'done' || state === 'working' || state === 'celebrating') {
+        this.stopCompactionShake()
+      }
+    }
+
     // Position builder on the right side at a FIXED screen position
     // The minifig doesn't scroll with the bricks - it stays visible on screen
     const x = ctx.width * 0.72 + 10  // Moved 10px to the right

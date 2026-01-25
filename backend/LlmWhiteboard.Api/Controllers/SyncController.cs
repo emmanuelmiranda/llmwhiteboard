@@ -142,6 +142,8 @@ public class SyncController : ControllerBase
             {
                 // Notify about session update (status change, title update, etc.)
                 await _notificationService.NotifySessionUpdatedAsync(userId, session.Id, sessionDto);
+                // Also notify public share viewers
+                await _notificationService.NotifyPublicSessionUpdatedAsync(userId, session.Id, updatedSession);
             }
 
             // Notify about new event
@@ -158,6 +160,9 @@ public class SyncController : ControllerBase
                 CreatedAt = newEvent.CreatedAt
             };
             await _notificationService.NotifyNewEventAsync(userId, session.Id, eventDto);
+
+            // Also notify public share viewers
+            await _notificationService.NotifyPublicNewEventAsync(userId, session.Id, newEvent);
         }
 
         return Ok(new SyncResponse

@@ -11,13 +11,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Copy, Trash2, Link2, Eye, EyeOff, Users, FolderOpen } from "lucide-react";
+import { Copy, Trash2, Link2, Eye, EyeOff, Users, FolderOpen, Check } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { apiClient, type ShareToken } from "@/lib/api-client";
 
 export default function SharesPage() {
   const [shares, setShares] = useState<ShareToken[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchShares = async () => {
@@ -56,12 +57,18 @@ export default function SharesPage() {
     }
   };
 
-  const copyShareUrl = (tokenPrefix: string) => {
-    // Note: We can only show the prefix, not the full token
+  const copyShareUrl = (share: ShareToken) => {
+    const frontendUrl = typeof window !== "undefined"
+      ? window.location.origin
+      : "https://llmwhiteboard.com";
+    const url = `${frontendUrl}/share/${share.token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedShareId(share.id);
     toast({
-      title: "Info",
-      description: "Share URLs can only be copied when first created. This is for security.",
+      title: "Copied",
+      description: "Share link copied to clipboard",
     });
+    setTimeout(() => setCopiedShareId(null), 2000);
   };
 
   const activeShares = shares.filter((s) => !s.isRevoked);
@@ -104,7 +111,7 @@ export default function SharesPage() {
                   <div className="space-y-2 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium">
-                        {share.name || `Share ${share.tokenPrefix}...`}
+                        {share.name || `Share ${share.token.slice(-8)}`}
                       </p>
                       <Badge variant={share.scope === "Session" ? "default" : "secondary"}>
                         {share.scope === "Session" ? (
@@ -124,7 +131,7 @@ export default function SharesPage() {
                       </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <code>{share.tokenPrefix}...</code>
+                      <code className="text-xs">{share.token.slice(0, 16)}...</code>
                       <span className="whitespace-nowrap">
                         Created {formatRelativeTime(new Date(share.createdAt))}
                       </span>
@@ -141,15 +148,29 @@ export default function SharesPage() {
                       )}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive flex-shrink-0"
-                    onClick={() => handleRevokeShare(share.id)}
-                    title="Revoke share"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => copyShareUrl(share)}
+                      title="Copy share link"
+                    >
+                      {copiedShareId === share.id ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive flex-shrink-0"
+                      onClick={() => handleRevokeShare(share.id)}
+                      title="Revoke share"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -175,12 +196,12 @@ export default function SharesPage() {
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">
-                        {share.name || `Share ${share.tokenPrefix}...`}
+                        {share.name || `Share ${share.token.slice(-8)}`}
                       </p>
                       <Badge variant="destructive">Revoked</Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <code>{share.tokenPrefix}...</code>
+                      <code className="text-xs">{share.token.slice(0, 16)}...</code>
                       <span className="whitespace-nowrap">
                         Created {formatRelativeTime(new Date(share.createdAt))}
                       </span>
@@ -226,9 +247,8 @@ export default function SharesPage() {
           <div className="space-y-2">
             <p className="font-medium">Security</p>
             <p className="text-sm text-muted-foreground">
-              Share links use secure tokens that are hashed in our database. You can revoke a share
-              at any time to immediately disable access. Consider using ActivityOnly visibility for
-              public sharing.
+              You can revoke a share at any time to immediately disable access. Consider using
+              ActivityOnly visibility for public sharing to hide sensitive information.
             </p>
           </div>
         </CardContent>
