@@ -341,7 +341,7 @@ public class SyncController : ControllerBase
             statusEnum = parsed;
         }
 
-        var (sessions, total, eventCounts) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
+        var (sessions, total, eventCounts, lastEvents) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
         {
             Search = search,
             Status = statusEnum,
@@ -374,7 +374,10 @@ public class SyncController : ControllerBase
                 CompactionCount = s.CompactionCount,
                 TotalTokensUsed = s.TotalTokensUsed,
                 LastActivityAt = s.LastActivityAt,
-                CreatedAt = s.CreatedAt
+                CreatedAt = s.CreatedAt,
+                LastEventType = lastEvents.GetValueOrDefault(s.Id)?.EventType,
+                LastEventToolName = lastEvents.GetValueOrDefault(s.Id)?.ToolName,
+                LastEventAt = lastEvents.GetValueOrDefault(s.Id)?.CreatedAt
             }).ToList(),
             Total = total,
             Limit = limit,

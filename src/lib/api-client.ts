@@ -336,6 +336,10 @@ interface Session {
   totalTokensUsed: number;
   lastActivityAt: string;
   createdAt: string;
+  // Last event info for computing activity state
+  lastEventType: string | null;
+  lastEventToolName: string | null;
+  lastEventAt: string | null;
 }
 
 interface SessionDetail extends Session {

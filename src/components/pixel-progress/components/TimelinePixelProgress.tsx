@@ -21,7 +21,8 @@ const EVENT_TYPE_TO_CATEGORY: Record<string, string> = {
   tool_use: 'execute',
   tool_use_start: 'process',
   agent_stop: 'end',
-  subagent_stop: 'process',
+  subagent_stop: 'success',  // Subagent completed successfully
+  stop: 'end',
   context_compaction: 'optimize',
   notification: 'output',
   model_request: 'analyze',

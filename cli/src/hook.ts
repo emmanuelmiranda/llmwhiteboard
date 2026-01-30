@@ -13,7 +13,7 @@ import { readConfig, getMachineId, readEncryptionKey } from "./lib/config.js";
 import { encrypt, computeChecksum } from "./lib/crypto.js";
 
 interface HookContext {
-  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "PermissionRequest" | "Notification" | "Stop" | "SessionStart" | "SessionEnd" | "PreCompact";
+  hook_event_name: "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "PermissionRequest" | "Notification" | "Stop" | "SubagentStop" | "SessionStart" | "SessionEnd" | "PreCompact";
   session_id: string;
   cwd: string;
   tool_name?: string;
@@ -23,6 +23,7 @@ interface HookContext {
   transcript_path?: string;
   trigger?: "manual" | "auto"; // For PreCompact events
   prompt?: string; // For UserPromptSubmit events
+  agent_id?: string; // For SubagentStop events
 }
 
 async function readStdin(): Promise<string> {
@@ -70,6 +71,7 @@ async function main() {
       PostToolUse: "tool_use",
       PermissionRequest: "permission_request",
       Stop: "stop",
+      SubagentStop: "subagent_stop",
       Notification: "message",
       PreCompact: "compaction",
     };

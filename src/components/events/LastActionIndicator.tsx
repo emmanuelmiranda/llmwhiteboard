@@ -20,8 +20,8 @@ export function LastActionIndicator({ event, showFullDetails = true }: LastActio
     );
   }
 
-  const { Icon, iconColor, isUserPrompt, isToolUse } = getEventIconInfo(event.eventType);
-  const isStop = event.eventType === "stop" || event.eventType === "session_end";
+  const { Icon, iconColor, isUserPrompt, isToolUse, isSubagentStop } = getEventIconInfo(event.eventType);
+  const isStop = event.eventType === "stop" || event.eventType === "session_end" || event.eventType === "agent_stop";
   const isActive = event.eventType === "tool_use_start" || event.eventType === "user_prompt";
 
   // Get a concise label for the action
@@ -31,6 +31,9 @@ export function LastActionIndicator({ event, showFullDetails = true }: LastActio
     }
     if (isToolUse) {
       return event.toolName || "Tool";
+    }
+    if (isSubagentStop) {
+      return "Subagent Done";
     }
     if (isStop) {
       return event.eventType === "session_end" ? "Completed" : "Paused";

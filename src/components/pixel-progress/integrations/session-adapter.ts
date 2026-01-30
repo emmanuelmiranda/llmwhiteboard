@@ -46,7 +46,7 @@ const EVENT_TYPE_TO_CATEGORY: Record<string, string> = {
   agent_stop: 'end',
   session_paused: 'end',
   stop: 'end',
-  subagent_stop: 'process',
+  subagent_stop: 'success',  // Subagent completed successfully - use success category for distinct green/celebratory color
 
   // System events
   context_compaction: 'optimize',

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSignalRContext, type HighlightType } from "./signalr-provider";
-import { apiClient } from "@/lib/api-client";
+import { useSignalRContext } from "./signalr-provider";
 import { MessageSquare, Wrench, Zap, MessageSquareMore, Loader2 } from "lucide-react";
 
 const STORAGE_KEY = "activity-stats";
@@ -17,6 +16,7 @@ interface RecentEvent {
 interface SessionEventInfo {
   eventType: string;
   toolName?: string | null;
+  timestamp?: number;
 }
 
 interface PersistedState {
@@ -52,7 +52,7 @@ function savePersistedState(state: PersistedState) {
 
 export function ActivityStats() {
   // Get context first (needed for persisted state loading)
-  const { onNewEvent, onSessionCreated, onSessionUpdated, triggerHighlight, setHoverHighlightType, updateSessionActivityState } = useSignalRContext();
+  const { onNewEvent, triggerHighlight, setHoverHighlightType, updateSessionActivityState } = useSignalRContext();
 
   // Local state
   const [initialized, setInitialized] = useState(false);
@@ -60,13 +60,12 @@ export function ActivityStats() {
   const [promptCount, setPromptCount] = useState(0);
   const [toolCount, setToolCount] = useState(0);
 
-  // Session stats
-  const [activeSessionCount, setActiveSessionCount] = useState(0);
-
   // Track sessions waiting for input
   const [sessionLastEvents, setSessionLastEvents] = useState<Map<string, SessionEventInfo>>(new Map());
 
-  // Load persisted state on mount
+  // Load persisted state on mount (for local stats display only)
+  // Note: Activity state is now initialized from API data in sessions page,
+  // so we don't call updateSessionActivityState here anymore
   useEffect(() => {
     const persisted = loadPersistedState();
     if (persisted) {
@@ -80,14 +79,10 @@ export function ActivityStats() {
       if (persisted.sessionLastEvents) {
         const entries = Object.entries(persisted.sessionLastEvents);
         setSessionLastEvents(new Map(entries));
-        // Also update shared context state
-        entries.forEach(([sessionId, info]) => {
-          updateSessionActivityState(sessionId, info.eventType, info.toolName);
-        });
       }
     }
     setInitialized(true);
-  }, [updateSessionActivityState]);
+  }, []);
 
   // Save state to localStorage when it changes
   useEffect(() => {
@@ -122,34 +117,49 @@ export function ActivityStats() {
     // Track last event per session for waiting detection
     setSessionLastEvents((prev) => {
       const next = new Map(prev);
-      next.set(sessionId, { eventType, toolName });
+      next.set(sessionId, { eventType, toolName, timestamp: now });
       return next;
     });
 
     // Update shared context state
-    updateSessionActivityState(sessionId, eventType, toolName);
+    updateSessionActivityState(sessionId, eventType, toolName, now);
   }, [updateSessionActivityState]);
 
   // Count sessions by state
   // tool_use_start is from PreToolUse hook (fires when question is asked)
   // tool_use is from PostToolUse hook (fires after user answers)
   // permission_request is when waiting for user to approve an action
+  const IDLE_THRESHOLD_DEFAULT = 5 * 60 * 1000; // 5 minutes
+  const IDLE_THRESHOLD_USER_PROMPT = 60 * 1000; // 1 minute for user_prompt
+
   const isWaitingEvent = (info: SessionEventInfo) => {
     if (info.eventType === "permission_request") return true;
-    if ((info.eventType === "tool_use_start" || info.eventType === "tool_use") && info.toolName?.toLowerCase() === "askuserquestion") return true;
+    if (info.eventType === "tool_use_start" && info.toolName?.toLowerCase() === "askuserquestion") return true;
     return false;
   };
 
-  const waitingCount = Array.from(sessionLastEvents.values()).filter(isWaitingEvent).length;
+  const isIdleByTime = (info: SessionEventInfo) => {
+    if (!info.timestamp) return false;
+    const threshold = info.eventType === "user_prompt" ? IDLE_THRESHOLD_USER_PROMPT : IDLE_THRESHOLD_DEFAULT;
+    return Date.now() - info.timestamp > threshold;
+  };
 
-  const idleCount = Array.from(sessionLastEvents.values()).filter(
-    (info) => !info.eventType || info.eventType === "stop" || info.eventType === "session_end"
+  const isIdleEvent = (info: SessionEventInfo) => {
+    if (!info.eventType) return true;
+    if (info.eventType === "stop" || info.eventType === "session_end" || info.eventType === "agent_stop") return true;
+    return isIdleByTime(info);
+  };
+
+  const waitingCount = Array.from(sessionLastEvents.values()).filter(
+    (info) => isWaitingEvent(info) && !isIdleByTime(info)
   ).length;
+
+  const idleCount = Array.from(sessionLastEvents.values()).filter(isIdleEvent).length;
 
   const workingCount = Array.from(sessionLastEvents.values()).filter(
     (info) => {
       if (!info.eventType) return false;
-      if (info.eventType === "stop" || info.eventType === "session_end") return false;
+      if (isIdleEvent(info)) return false;
       if (isWaitingEvent(info)) return false;
       return true;
     }
@@ -171,44 +181,16 @@ export function ActivityStats() {
     return Math.round(ratio);
   })();
 
-  // Fetch initial session stats
-  const fetchSessionStats = useCallback(async () => {
-    try {
-      const data = await apiClient.getSessions({ status: "Active", limit: 100 });
-      const activeSessions = data.sessions || [];
-      setActiveSessionCount(activeSessions.length);
-    } catch (error) {
-      // Silently fail - stats are non-critical
-    }
-  }, []);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchSessionStats();
-  }, [fetchSessionStats]);
-
   // Subscribe to real-time events
   useEffect(() => {
     const unsubscribeEvent = onNewEvent((event) => {
       addEvent(event.eventType, event.id, event.sessionId, event.toolName);
     });
 
-    const unsubscribeCreated = onSessionCreated(() => {
-      // Refresh session stats when a new session is created
-      fetchSessionStats();
-    });
-
-    const unsubscribeUpdated = onSessionUpdated(() => {
-      // Refresh session stats when a session is updated
-      fetchSessionStats();
-    });
-
     return () => {
       unsubscribeEvent();
-      unsubscribeCreated();
-      unsubscribeUpdated();
     };
-  }, [onNewEvent, onSessionCreated, onSessionUpdated, addEvent, fetchSessionStats]);
+  }, [onNewEvent, addEvent]);
 
   // Cleanup old events periodically
   useEffect(() => {
@@ -222,38 +204,25 @@ export function ActivityStats() {
 
   return (
     <div className="flex items-center gap-4 text-sm flex-wrap">
-      {/* Active Sessions */}
-      <div
-        className="flex items-center gap-1.5 text-muted-foreground cursor-help"
-        title="Total sessions with Active status"
-      >
-        <div className={`h-2 w-2 rounded-full ${activeSessionCount > 0 ? "bg-green-500" : "bg-gray-400"}`} />
-        <span className="font-medium text-foreground">{activeSessionCount}</span>
-        <span className="hidden sm:inline">Active</span>
-      </div>
-
       {/* Working sessions */}
       {workingCount > 0 && (
-        <>
-          <div className="h-4 w-px bg-border" />
-          <button
-            onClick={() => triggerHighlight("working")}
-            onMouseEnter={() => setHoverHighlightType("working")}
-            onMouseLeave={() => setHoverHighlightType(null)}
-            className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 cursor-pointer hover:opacity-80 transition-opacity"
-            title="Hover to highlight working sessions, click to pulse"
-          >
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span className="font-medium">{workingCount}</span>
-            <span className="hidden sm:inline">working</span>
-          </button>
-        </>
+        <button
+          onClick={() => triggerHighlight("working")}
+          onMouseEnter={() => setHoverHighlightType("working")}
+          onMouseLeave={() => setHoverHighlightType(null)}
+          className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 cursor-pointer hover:opacity-80 transition-opacity"
+          title="Hover to highlight working sessions, click to pulse"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span className="font-medium">{workingCount}</span>
+          <span className="hidden sm:inline">working</span>
+        </button>
       )}
 
       {/* Waiting for input */}
       {waitingCount > 0 && (
         <>
-          <div className="h-4 w-px bg-border" />
+          {workingCount > 0 && <div className="h-4 w-px bg-border" />}
           <button
             onClick={() => triggerHighlight("waiting")}
             onMouseEnter={() => setHoverHighlightType("waiting")}

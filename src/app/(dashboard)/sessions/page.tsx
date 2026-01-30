@@ -12,8 +12,49 @@ import {
 } from "@/components/ui/select";
 import { SessionCard, type SessionActivityState } from "@/components/SessionCard";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, LayoutGrid, List, Inbox, Sparkles, Bot } from "lucide-react";
+import { Search, LayoutGrid, List, Inbox, Sparkles, Bot, Loader2, MessageSquareMore, Clock, Pause, CheckCircle, Archive } from "lucide-react";
 import { apiClient, type Session } from "@/lib/api-client";
+
+// Compute activity state from session's last event data
+// This is used for initial render before SignalR context is updated
+function computeActivityStateFromSession(session: Session): "working" | "waiting" | "idle" {
+  if (session.status !== "Active") return "idle";
+
+  const eventType = session.lastEventType?.toLowerCase();
+  const toolName = session.lastEventToolName;
+  const eventTime = session.lastEventAt ? new Date(session.lastEventAt).getTime() : null;
+
+  if (!eventType || !eventTime) return "idle";
+
+  // Time thresholds
+  const IDLE_THRESHOLD_DEFAULT = 5 * 60 * 1000; // 5 minutes
+  const IDLE_THRESHOLD_USER_PROMPT = 60 * 1000; // 1 minute for user_prompt
+
+  const threshold = eventType === "user_prompt" ? IDLE_THRESHOLD_USER_PROMPT : IDLE_THRESHOLD_DEFAULT;
+  const timeSinceEvent = Date.now() - eventTime;
+
+  // Check if too old
+  if (timeSinceEvent > threshold) return "idle";
+
+  // Session stopped or ended = idle
+  if (eventType === "stop" || eventType === "session_end" || eventType === "agent_stop") {
+    return "idle";
+  }
+
+  // Permission request = waiting
+  if (eventType === "permission_request") {
+    return "waiting";
+  }
+
+  // AskUserQuestion tool_use_start = waiting (question asked, waiting for answer)
+  // tool_use = answer received, so that's "working"
+  if (eventType === "tool_use_start" && toolName?.toLowerCase() === "askuserquestion") {
+    return "waiting";
+  }
+
+  // Everything else = working
+  return "working";
+}
 import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ActivityStats } from "@/components/activity-stats";
@@ -22,7 +63,8 @@ export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Unified state filter: working/waiting/idle (hook-driven) + paused/completed/archived (manual)
+  const [stateFilter, setStateFilter] = useState<string>("all");
   const [cliFilter, setCliFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [glowingIds, setGlowingIds] = useState<Set<string>>(new Set());
@@ -34,7 +76,6 @@ export default function SessionsPage() {
     onNewEvent,
     highlightType,
     hoverHighlightType,
-    getSessionActivityState,
     updateSessionActivityState,
   } = useSignalRContext();
 
@@ -53,12 +94,30 @@ export default function SessionsPage() {
   const fetchSessions = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Map state filter to API status filter
+      // working/waiting/idle = Active sessions (filtered client-side)
+      // paused/completed/archived = direct database status
+      let apiStatus: string | undefined;
+      if (stateFilter === "paused") apiStatus = "Paused";
+      else if (stateFilter === "completed") apiStatus = "Completed";
+      else if (stateFilter === "archived") apiStatus = "Archived";
+      else if (stateFilter === "working" || stateFilter === "waiting" || stateFilter === "idle") apiStatus = "Active";
+      // "all" = undefined (fetch all)
+
       const data = await apiClient.getSessions({
         search: search || undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
+        status: apiStatus,
         cliType: cliFilter !== "all" ? cliFilter : undefined,
       });
       setSessions(data.sessions || []);
+
+      // Initialize activity state from API data (last event info)
+      for (const session of data.sessions || []) {
+        if (session.lastEventType && session.lastEventAt) {
+          const eventTime = new Date(session.lastEventAt).getTime();
+          updateSessionActivityState(session.id, session.lastEventType, session.lastEventToolName, eventTime);
+        }
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -68,7 +127,7 @@ export default function SessionsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, statusFilter, cliFilter, toast]);
+  }, [search, stateFilter, cliFilter, toast, updateSessionActivityState]);
 
   useEffect(() => {
     fetchSessions();
@@ -104,6 +163,19 @@ export default function SessionsPage() {
     const unsubscribeNewEvent = onNewEvent((event) => {
       // Update activity state based on event type
       updateSessionActivityState(event.sessionId, event.eventType, event.toolName);
+      // Also update the session's last event info so computeActivityStateFromSession works
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === event.sessionId
+            ? {
+                ...s,
+                lastEventType: event.eventType,
+                lastEventToolName: event.toolName,
+                lastEventAt: new Date().toISOString(),
+              }
+            : s
+        )
+      );
     });
 
     return () => {
@@ -150,16 +222,48 @@ export default function SessionsPage() {
         </form>
 
         <div className="flex gap-2 flex-wrap">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[120px] sm:w-[140px]">
-              <SelectValue placeholder="Status" />
+          <Select value={stateFilter} onValueChange={setStateFilter}>
+            <SelectTrigger className="w-[130px] sm:w-[150px]">
+              <SelectValue placeholder="State" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="Active">Active</SelectItem>
-              <SelectItem value="Paused">Paused</SelectItem>
-              <SelectItem value="Completed">Completed</SelectItem>
-              <SelectItem value="Archived">Archived</SelectItem>
+              <SelectItem value="all">All States</SelectItem>
+              <SelectItem value="working">
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 text-blue-500" />
+                  Working
+                </span>
+              </SelectItem>
+              <SelectItem value="waiting">
+                <span className="flex items-center gap-1.5">
+                  <MessageSquareMore className="h-3.5 w-3.5 text-amber-500" />
+                  Waiting
+                </span>
+              </SelectItem>
+              <SelectItem value="idle">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-gray-500" />
+                  Idle
+                </span>
+              </SelectItem>
+              <SelectItem value="paused">
+                <span className="flex items-center gap-1.5">
+                  <Pause className="h-3.5 w-3.5 text-yellow-500" />
+                  Paused
+                </span>
+              </SelectItem>
+              <SelectItem value="completed">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                  Completed
+                </span>
+              </SelectItem>
+              <SelectItem value="archived">
+                <span className="flex items-center gap-1.5">
+                  <Archive className="h-3.5 w-3.5 text-gray-400" />
+                  Archived
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -230,25 +334,40 @@ export default function SessionsPage() {
               : "space-y-4"
           }
         >
-          {sessions.map((session) => {
-            // Only show activity state for active sessions
-            const activityState = session.status === "Active" ? getSessionActivityState(session.id) : "idle";
-            const shouldPulse = highlightType && activityState === highlightType;
-            const shouldHoverHighlight = hoverHighlightType && activityState === hoverHighlightType;
-            return (
-              <div
-                key={session.id}
-                className={`rounded-lg transition-colors ${glowingIds.has(session.id) ? "realtime-glow" : ""} ${
-                  shouldPulse ? `highlight-pulse-${highlightType}` : ""
-                } ${shouldHoverHighlight ? (hoverHighlightType === "waiting" ? "bg-amber-100 dark:bg-amber-900/30" : "bg-blue-100 dark:bg-blue-900/30") : ""}`}
-              >
-                <SessionCard
-                  session={session}
-                  activityState={activityState}
-                />
-              </div>
-            );
-          })}
+          {sessions
+            .map((session) => {
+              // Compute activity state directly from session's last event data
+              // This is reliable and doesn't depend on context timing
+              const activityState: SessionActivityState = computeActivityStateFromSession(session);
+
+              // Unified state combines activity state with manual statuses (paused, completed, archived)
+              const unifiedState = session.status === "Active"
+                ? activityState
+                : session.status.toLowerCase();
+              return { session, activityState, unifiedState };
+            })
+            .filter(({ unifiedState }) => {
+              // Filter by unified state
+              if (stateFilter === "all") return true;
+              return unifiedState === stateFilter;
+            })
+            .map(({ session, activityState }) => {
+              const shouldPulse = highlightType && activityState === highlightType;
+              const shouldHoverHighlight = hoverHighlightType && activityState === hoverHighlightType;
+              return (
+                <div
+                  key={session.id}
+                  className={`rounded-lg transition-colors ${glowingIds.has(session.id) ? "realtime-glow" : ""} ${
+                    shouldPulse ? `highlight-pulse-${highlightType}` : ""
+                  } ${shouldHoverHighlight ? (hoverHighlightType === "waiting" ? "bg-amber-100 dark:bg-amber-900/30" : "bg-blue-100 dark:bg-blue-900/30") : ""}`}
+                >
+                  <SessionCard
+                    session={session}
+                    activityState={activityState}
+                  />
+                </div>
+              );
+            })}
         </div>
       )}
     </div>

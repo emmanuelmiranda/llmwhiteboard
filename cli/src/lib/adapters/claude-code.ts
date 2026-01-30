@@ -117,6 +117,7 @@ export class ClaudeCodeAdapter implements CliAdapter {
       "PostToolUse",
       "PermissionRequest",  // Detect when waiting for permission approval
       "Stop",
+      "SubagentStop",  // Track when subagents complete
       "PreCompact",
     ];
   }

@@ -28,6 +28,52 @@ interface TimelineSession {
   lastActivityAt: string;
   createdAt: string;
   eventCount: number;
+  // Last event info for computing activity state
+  lastEventType: string | null;
+  lastEventToolName: string | null;
+  lastEventAt: string | null;
+}
+
+type ActivityState = "idle" | "working" | "waiting";
+
+// Compute activity state from session's last event data
+function computeActivityStateFromSession(session: TimelineSession): ActivityState {
+  if (session.status !== "Active") return "idle";
+
+  const eventType = session.lastEventType?.toLowerCase();
+  const toolName = session.lastEventToolName;
+  const eventTime = session.lastEventAt ? new Date(session.lastEventAt).getTime() : null;
+
+  if (!eventType || !eventTime) return "idle";
+
+  // Time thresholds
+  const IDLE_THRESHOLD_DEFAULT = 5 * 60 * 1000; // 5 minutes
+  const IDLE_THRESHOLD_USER_PROMPT = 60 * 1000; // 1 minute for user_prompt
+
+  const threshold = eventType === "user_prompt" ? IDLE_THRESHOLD_USER_PROMPT : IDLE_THRESHOLD_DEFAULT;
+  const timeSinceEvent = Date.now() - eventTime;
+
+  // Check if too old
+  if (timeSinceEvent > threshold) return "idle";
+
+  // Session stopped or ended = idle
+  if (eventType === "stop" || eventType === "session_end" || eventType === "agent_stop") {
+    return "idle";
+  }
+
+  // Permission request = waiting
+  if (eventType === "permission_request") {
+    return "waiting";
+  }
+
+  // AskUserQuestion tool_use_start = waiting (question asked, waiting for answer)
+  // tool_use = answer received, so that's "working"
+  if (eventType === "tool_use_start" && toolName?.toLowerCase() === "askuserquestion") {
+    return "waiting";
+  }
+
+  // Everything else = working
+  return "working";
 }
 
 interface TimelineEvent {
@@ -220,15 +266,8 @@ export default function TimelinePage() {
     onNewEvent,
     highlightType,
     hoverHighlightType,
-    getSessionActivityState,
     updateSessionActivityState,
   } = useSignalRContext();
-
-  // Wrapper to check session status before returning activity state
-  const getActivityState = useCallback((sessionId: string, status: string) => {
-    if (status !== "Active") return "idle";
-    return getSessionActivityState(sessionId);
-  }, [getSessionActivityState]);
 
   // Add glow effect to a session temporarily
   const addSessionGlow = useCallback((id: string) => {
@@ -293,6 +332,19 @@ export default function TimelinePage() {
       addEventGlow(newEvent.id);
       // Track activity state
       updateSessionActivityState(newEvent.sessionId, newEvent.eventType, newEvent.toolName);
+      // Also update the session's last event info so computeActivityStateFromSession works
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === newEvent.sessionId
+            ? {
+                ...s,
+                lastEventType: newEvent.eventType,
+                lastEventToolName: newEvent.toolName,
+                lastEventAt: new Date().toISOString(),
+              }
+            : s
+        )
+      );
     });
 
     const unsubscribeCreated = onSessionCreated((newSession) => {
@@ -327,13 +379,14 @@ export default function TimelinePage() {
   // Filter sessions based on selected filter
   const matchesSessionFilter = useCallback((session: TimelineSession, filter: SessionFilter): boolean => {
     if (filter === "all") return true;
-    const activityState = getActivityState(session.id, session.status);
-    if (filter === "active") return session.status === "Active";
+    const activityState = computeActivityStateFromSession(session);
+    // "Active" means currently doing something (working or waiting), not idle
+    if (filter === "active") return activityState === "working" || activityState === "waiting";
     if (filter === "working") return activityState === "working";
     if (filter === "waiting") return activityState === "waiting";
     if (filter === "idle") return activityState === "idle" || session.status !== "Active";
     return true;
-  }, [getActivityState]);
+  }, []);
 
   const filteredSessions = sessions.filter((session) => matchesSessionFilter(session, sessionFilter));
   const filteredSessionIds = new Set(filteredSessions.map((s) => s.id));
@@ -466,7 +519,7 @@ export default function TimelinePage() {
               </p>
             ) : (
               filteredSessions.slice(0, 10).map((session) => {
-                const activityState = getActivityState(session.id, session.status);
+                const activityState = computeActivityStateFromSession(session);
                 const shouldPulse = highlightType && activityState === highlightType;
                 const shouldStatsHover = hoverHighlightType && activityState === hoverHighlightType;
                 const isEventHovered = hoveredEventSessionId === session.id;
@@ -498,6 +551,11 @@ export default function TimelinePage() {
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
                             <Loader2 className="h-3 w-3 mr-0.5 animate-spin" />
                             Working
+                          </span>
+                        ) : activityState === "idle" && session.status === "Active" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 shrink-0">
+                            <Clock className="h-3 w-3 mr-0.5" />
+                            Idle
                           </span>
                         ) : (
                           <Badge variant={statusColors[session.status]} className="text-xs shrink-0">
@@ -579,7 +637,7 @@ export default function TimelinePage() {
                         const session = sessions.find(
                           (s) => s.id === event.sessionId
                         );
-                        const sessionActivityState = session ? getActivityState(session.id, session.status) : "idle";
+                        const sessionActivityState = session ? computeActivityStateFromSession(session) : "idle";
                         const isSessionHovered = hoveredSessionId === event.sessionId;
                         const isStatsHovered = hoverHighlightType && sessionActivityState === hoverHighlightType;
                         const isHighlighted = isSessionHovered || isStatsHovered;

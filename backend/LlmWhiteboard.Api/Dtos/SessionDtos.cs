@@ -33,6 +33,20 @@ public class SessionDto
     public long TotalTokensUsed { get; set; }
     public DateTime LastActivityAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    // Last event info for computing activity state
+    /// <summary>
+    /// Event type of the most recent event (user_prompt, tool_use, stop, etc.)
+    /// </summary>
+    public string? LastEventType { get; set; }
+    /// <summary>
+    /// Tool name of the most recent event (if applicable)
+    /// </summary>
+    public string? LastEventToolName { get; set; }
+    /// <summary>
+    /// Timestamp of the most recent event
+    /// </summary>
+    public DateTime? LastEventAt { get; set; }
 }
 
 public class SessionDetailDto : SessionDto
@@ -124,4 +138,14 @@ public class SnapshotDto
 public class SnapshotListResponse
 {
     public List<SnapshotDto> Snapshots { get; set; } = new();
+}
+
+/// <summary>
+/// Last event info for computing activity state
+/// </summary>
+public class LastEventInfo
+{
+    public string EventType { get; set; } = null!;
+    public string? ToolName { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

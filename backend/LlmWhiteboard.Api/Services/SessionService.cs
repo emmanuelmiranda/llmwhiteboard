@@ -61,7 +61,7 @@ public class SessionService : ISessionService
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
     }
 
-    public async Task<(List<Session> Sessions, int Total, Dictionary<string, int> EventCounts)> ListSessionsAsync(string userId, SessionListQuery query)
+    public async Task<(List<Session> Sessions, int Total, Dictionary<string, int> EventCounts, Dictionary<string, LastEventInfo> LastEvents)> ListSessionsAsync(string userId, SessionListQuery query)
     {
         var baseQuery = _db.Sessions
             .Where(s => s.UserId == userId);
@@ -105,6 +105,20 @@ public class SessionService : ISessionService
             .Select(g => new { SessionId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.SessionId, x => x.Count);
 
+        // Load last event for each session (for activity state computation)
+        var lastEvents = await _db.SessionEvents
+            .Where(e => sessionIds.Contains(e.SessionId))
+            .GroupBy(e => e.SessionId)
+            .Select(g => g.OrderByDescending(e => e.CreatedAt).First())
+            .ToDictionaryAsync(
+                e => e.SessionId,
+                e => new LastEventInfo
+                {
+                    EventType = e.EventType,
+                    ToolName = e.ToolName,
+                    CreatedAt = e.CreatedAt
+                });
+
         // Load transcript metadata (size, encrypted) without loading content
         var transcriptInfo = await _db.SessionTranscripts
             .Where(t => sessionIds.Contains(t.SessionId))
@@ -126,7 +140,7 @@ public class SessionService : ISessionService
             }
         }
 
-        return (sessions, total, eventCounts);
+        return (sessions, total, eventCounts, lastEvents);
     }
 
     public async Task<Session> UpdateSessionAsync(string sessionId, string userId, SessionUpdateDto update)

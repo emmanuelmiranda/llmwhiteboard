@@ -24,7 +24,7 @@ interface SignalRContextValue {
   setHoverHighlightType: (type: HighlightType) => void;
   // Shared activity state tracking
   getSessionActivityState: (sessionId: string) => ActivityState;
-  updateSessionActivityState: (sessionId: string, eventType: string | undefined | null, toolName?: string | null) => void;
+  updateSessionActivityState: (sessionId: string, eventType: string | undefined | null, toolName?: string | null, eventTime?: number) => void;
 }
 
 const SignalRContext = createContext<SignalRContextValue | null>(null);
@@ -34,16 +34,17 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [highlightType, setHighlightType] = useState<HighlightType>(null);
   const [hoverHighlightType, setHoverHighlightType] = useState<HighlightType>(null);
-  const [sessionActivityStates, setSessionActivityStates] = useState<Map<string, { state: ActivityState; lastEventTime: number }>>(new Map());
+  const [sessionActivityStates, setSessionActivityStates] = useState<Map<string, { state: ActivityState; eventType: string; lastEventTime: number }>>(new Map());
 
-  // Time threshold for considering a session idle (5 minutes)
-  const IDLE_THRESHOLD = 5 * 60 * 1000;
+  // Time thresholds for considering a session idle
+  const IDLE_THRESHOLD_DEFAULT = 5 * 60 * 1000; // 5 minutes for most events
+  const IDLE_THRESHOLD_USER_PROMPT = 60 * 1000; // 1 minute for user_prompt (Claude should respond quickly)
 
   const getActivityStateFromEvent = (eventType: string | undefined | null, toolName?: string | null): ActivityState => {
     if (!eventType) return "idle";
     const type = eventType.toLowerCase();
     // Session stopped or ended = idle
-    if (type === "stop" || type === "session_end") {
+    if (type === "stop" || type === "session_end" || type === "agent_stop") {
       return "idle";
     }
     // Permission request = waiting for user approval
@@ -51,21 +52,22 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
       return "waiting";
     }
     // Claude asked a question = waiting for user input
-    // tool_use_start is from PreToolUse hook (fires when question is asked)
-    // tool_use is from PostToolUse hook (fires after user answers)
-    if ((type === "tool_use_start" || type === "tool_use") && toolName?.toLowerCase() === "askuserquestion") {
+    // tool_use_start is from PreToolUse hook (fires when question is asked) = waiting
+    // tool_use is from PostToolUse hook (fires after user answers) = working
+    if (type === "tool_use_start" && toolName?.toLowerCase() === "askuserquestion") {
       return "waiting";
     }
     // User submitted a prompt or any other activity = working
     return "working";
   };
 
-  const updateSessionActivityState = useCallback((sessionId: string, eventType: string | undefined | null, toolName?: string | null) => {
+  const updateSessionActivityState = useCallback((sessionId: string, eventType: string | undefined | null, toolName?: string | null, eventTime?: number) => {
     setSessionActivityStates((prev) => {
       const next = new Map(prev);
       next.set(sessionId, {
         state: getActivityStateFromEvent(eventType, toolName),
-        lastEventTime: Date.now(),
+        eventType: eventType?.toLowerCase() || "",
+        lastEventTime: eventTime ?? Date.now(),
       });
       return next;
     });
@@ -74,7 +76,15 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
   const getSessionActivityState = useCallback((sessionId: string): ActivityState => {
     const info = sessionActivityStates.get(sessionId);
     if (!info) return "idle";
-    if (Date.now() - info.lastEventTime > IDLE_THRESHOLD) return "idle";
+
+    // Use shorter threshold for user_prompt events
+    // If Claude was going to respond with tools, we'd see tool_use events quickly
+    // If no activity after a user_prompt, Claude likely finished with text-only response
+    const threshold = info.eventType === "user_prompt"
+      ? IDLE_THRESHOLD_USER_PROMPT
+      : IDLE_THRESHOLD_DEFAULT;
+
+    if (Date.now() - info.lastEventTime > threshold) return "idle";
     return info.state;
   }, [sessionActivityStates]);
 

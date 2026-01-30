@@ -1,4 +1,4 @@
-import { MessageSquare, Wrench, Activity, Square, Play, Zap } from "lucide-react";
+import { MessageSquare, Wrench, Activity, Square, Play, Zap, GitBranch } from "lucide-react";
 import type { BaseEvent } from "./types";
 
 export type SessionBlock = {
@@ -73,7 +73,8 @@ export function getEventIconInfo(eventType: string) {
   const isUserPrompt = eventType === "user_prompt";
   const isToolUse = eventType === "tool_use";
   const isCompaction = eventType === "compaction";
-  const isStop = eventType === "stop" || eventType === "session_end";
+  const isStop = eventType === "stop" || eventType === "session_end" || eventType === "agent_stop";
+  const isSubagentStop = eventType === "subagent_stop";
   const isStart = eventType === "session_start";
 
   let Icon = Activity;
@@ -88,6 +89,9 @@ export function getEventIconInfo(eventType: string) {
   } else if (isCompaction) {
     Icon = Zap;
     iconColor = "text-amber-500";
+  } else if (isSubagentStop) {
+    Icon = GitBranch;
+    iconColor = "text-purple-500";
   } else if (isStop) {
     Icon = Square;
     iconColor = eventType === "session_end" ? "text-red-500" : "text-gray-500";
@@ -96,5 +100,5 @@ export function getEventIconInfo(eventType: string) {
     iconColor = "text-green-500";
   }
 
-  return { Icon, iconColor, isUserPrompt, isToolUse, isCompaction, isStop, isStart };
+  return { Icon, iconColor, isUserPrompt, isToolUse, isCompaction, isStop, isSubagentStop, isStart };
 }

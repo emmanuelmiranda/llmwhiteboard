@@ -65,7 +65,8 @@ export function PublicSignalRProvider({ token, children }: PublicSignalRProvider
       return "waiting";
     }
     // Claude asked a question = waiting for user input
-    if ((type === "tool_use_start" || type === "tool_use") && toolName?.toLowerCase() === "askuserquestion") {
+    // Only tool_use_start means waiting; tool_use means answer received
+    if (type === "tool_use_start" && toolName?.toLowerCase() === "askuserquestion") {
       return "waiting";
     }
     // User submitted a prompt or any other activity = working

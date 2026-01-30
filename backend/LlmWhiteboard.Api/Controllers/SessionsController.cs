@@ -41,7 +41,7 @@ public class SessionsController : ControllerBase
             statusEnum = parsed;
         }
 
-        var (sessions, total, eventCounts) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
+        var (sessions, total, eventCounts, lastEvents) = await _sessionService.ListSessionsAsync(userId, new SessionListQuery
         {
             Search = search,
             Status = statusEnum,
@@ -52,7 +52,11 @@ public class SessionsController : ControllerBase
 
         return Ok(new SessionListResponse
         {
-            Sessions = sessions.Select(s => MapToDto(s, eventCounts.GetValueOrDefault(s.Id, 0))).ToList(),
+            Sessions = sessions.Select(s => MapToDto(
+                s,
+                eventCounts.GetValueOrDefault(s.Id, 0),
+                lastEvents.GetValueOrDefault(s.Id)
+            )).ToList(),
             Total = total,
             Limit = limit,
             Offset = offset
@@ -168,7 +172,7 @@ public class SessionsController : ControllerBase
         });
     }
 
-    private static SessionDto MapToDto(Session session, int? eventCount = null)
+    private static SessionDto MapToDto(Session session, int? eventCount = null, LastEventInfo? lastEvent = null)
     {
         return new SessionDto
         {
@@ -193,7 +197,11 @@ public class SessionsController : ControllerBase
             CompactionCount = session.CompactionCount,
             TotalTokensUsed = session.TotalTokensUsed,
             LastActivityAt = session.LastActivityAt,
-            CreatedAt = session.CreatedAt
+            CreatedAt = session.CreatedAt,
+            // Last event info for activity state
+            LastEventType = lastEvent?.EventType,
+            LastEventToolName = lastEvent?.ToolName,
+            LastEventAt = lastEvent?.CreatedAt
         };
     }
 
