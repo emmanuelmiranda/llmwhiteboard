@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { SessionCard, type SessionActivityState } from "@/components/SessionCard";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, LayoutGrid, List, Inbox, Sparkles, Bot, Loader2, MessageSquareMore, Clock, Pause, CheckCircle, Archive } from "lucide-react";
+import { Search, LayoutGrid, List, Inbox, Sparkles, Bot, Loader2, MessageSquareMore, Clock, Pause, CheckCircle, Archive, ArrowUpDown, ArrowDown, ArrowUp } from "lucide-react";
 import { apiClient, type Session } from "@/lib/api-client";
 
 // Compute activity state from session's last event data
@@ -66,6 +66,8 @@ export default function SessionsPage() {
   // Unified state filter: working/waiting/idle (hook-driven) + paused/completed/archived (manual)
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [cliFilter, setCliFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("lastActive");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [glowingIds, setGlowingIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -288,6 +290,29 @@ export default function SessionsPage() {
             </SelectContent>
           </Select>
 
+          <div className="flex items-center gap-1">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[130px] sm:w-[150px]">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lastActive">Last Active</SelectItem>
+                <SelectItem value="size">Size</SelectItem>
+                <SelectItem value="events">Events</SelectItem>
+                <SelectItem value="created">Created</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSortDir(sortDir === "desc" ? "asc" : "desc")}
+              title={sortDir === "desc" ? "Descending (newest/largest first)" : "Ascending (oldest/smallest first)"}
+            >
+              {sortDir === "desc" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+            </Button>
+          </div>
+
           <div className="flex border rounded-md">
             <Button
               variant={viewMode === "grid" ? "secondary" : "ghost"}
@@ -335,6 +360,26 @@ export default function SessionsPage() {
           }
         >
           {sessions
+            .slice() // Create a copy to avoid mutating state
+            .sort((a, b) => {
+              let comparison = 0;
+              switch (sortBy) {
+                case "size":
+                  comparison = (a.transcriptSizeBytes || 0) - (b.transcriptSizeBytes || 0);
+                  break;
+                case "events":
+                  comparison = (a.eventCount || 0) - (b.eventCount || 0);
+                  break;
+                case "created":
+                  comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                  break;
+                case "lastActive":
+                default:
+                  comparison = new Date(a.lastActivityAt).getTime() - new Date(b.lastActivityAt).getTime();
+                  break;
+              }
+              return sortDir === "desc" ? -comparison : comparison;
+            })
             .map((session) => {
               // Compute activity state directly from session's last event data
               // This is reliable and doesn't depend on context timing
