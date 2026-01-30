@@ -371,14 +371,25 @@ export function usePixelProgress(
 
       const isAttentionNeeded = event.category === 'wait' || event.category === 'input'
       const isEndEvent = event.category === 'end' || event.category === 'stop' || event.category === 'success'
+      const isNewPrompt = eventType === 'user_prompt'
 
       console.log('[usePixelProgress] On-complete mode:', {
         isAttentionNeeded,
         isEndEvent,
+        isNewPrompt,
         bufferAfterPush: currentBlockCategoriesRef.current.length,
       })
 
-      if (isAttentionNeeded) {
+      if (isNewPrompt && currentBlockCategoriesRef.current.length > 1) {
+        // New prompt means previous block is complete - play accumulated tune (excluding this prompt)
+        // Pop the current event since we want to play what was accumulated before this prompt
+        const previousCategories = currentBlockCategoriesRef.current.slice(0, -1)
+        console.log('[usePixelProgress] Playing tune for previous block before new prompt')
+        soundEngine.playSequence(previousCategories, { times: 1 })
+        // Start fresh with just this prompt's category
+        currentBlockCategoriesRef.current = [event.category]
+        soundEngine.setCurrentCategories(currentBlockCategoriesRef.current)
+      } else if (isAttentionNeeded) {
         // Play sequence twice for attention
         console.log('[usePixelProgress] Playing attention sequence')
         soundEngine.playSequence(currentBlockCategoriesRef.current, { times: 2 })

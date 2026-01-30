@@ -415,6 +415,7 @@ interface CreateShareRequest {
   scope: ShareScope;
   visibility: ShareVisibility;
   name?: string;
+  displayName?: string;
   expiresAt?: string;
   maxViewers?: number;
 }

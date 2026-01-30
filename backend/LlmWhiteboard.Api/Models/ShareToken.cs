@@ -43,6 +43,12 @@ public class ShareToken
     public string? Name { get; set; }
 
     /// <summary>
+    /// Optional display name shown to viewers instead of the user's actual name.
+    /// Allows for anonymous or custom identity when sharing.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>
     /// Optional expiration time. Null means no expiry.
     /// </summary>
     public DateTime? ExpiresAt { get; set; }

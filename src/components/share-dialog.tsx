@@ -42,6 +42,7 @@ export function ShareDialog({ sessionId, sessionTitle, trigger }: ShareDialogPro
   const [copied, setCopied] = useState(false);
   const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [visibility, setVisibility] = useState<ShareVisibility>("Full");
   const { toast } = useToast();
 
@@ -79,6 +80,7 @@ export function ShareDialog({ sessionId, sessionTitle, trigger }: ShareDialogPro
         scope: "Session",
         visibility,
         name: name || undefined,
+        displayName: displayName || undefined,
       });
       setShareUrl(result.url);
       // Reload shares to include the new one
@@ -144,6 +146,7 @@ export function ShareDialog({ sessionId, sessionTitle, trigger }: ShareDialogPro
     setTimeout(() => {
       setShareUrl(null);
       setName("");
+      setDisplayName("");
       setVisibility("Full");
       setCopied(false);
       setShowCreateForm(false);
@@ -153,6 +156,7 @@ export function ShareDialog({ sessionId, sessionTitle, trigger }: ShareDialogPro
   const resetToList = () => {
     setShareUrl(null);
     setName("");
+    setDisplayName("");
     setVisibility("Full");
     setShowCreateForm(false);
   };
@@ -204,13 +208,26 @@ export function ShareDialog({ sessionId, sessionTitle, trigger }: ShareDialogPro
             /* Create new share form */
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name (optional)</Label>
+                <Label htmlFor="name">Link Name (optional)</Label>
                 <Input
                   id="name"
                   placeholder="e.g., Team review link"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Share As (optional)</Label>
+                <Input
+                  id="displayName"
+                  placeholder="e.g., Anonymous, John, etc."
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Custom name shown to viewers instead of your username. Leave empty to use your account name.
+                </p>
               </div>
 
               <div className="space-y-2">

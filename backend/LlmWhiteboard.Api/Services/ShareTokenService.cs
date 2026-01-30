@@ -48,6 +48,7 @@ public class ShareTokenService : IShareTokenService
             Visibility = request.Visibility,
             Token = token,
             Name = request.Name,
+            DisplayName = request.DisplayName,
             ExpiresAt = request.ExpiresAt,
             MaxViewers = request.MaxViewers
         };

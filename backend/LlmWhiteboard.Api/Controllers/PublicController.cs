@@ -71,7 +71,8 @@ public class PublicController : ControllerBase
             Visibility = shareToken.Visibility.ToString(),
             SessionId = shareToken.SessionId,
             UserId = shareToken.UserId,
-            UserName = shareToken.User?.Name
+            // Use custom display name if set, otherwise fall back to user's name
+            UserName = shareToken.DisplayName ?? shareToken.User?.Name
         });
     }
 
