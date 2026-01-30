@@ -98,20 +98,21 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Note: SignalR normalizes method names to lowercase when using System.Text.Json
   const onSessionCreated = (callback: (session: Session) => void) => {
-    return on("SessionCreated", callback);
+    return on("sessionCreated", callback);
   };
 
   const onSessionUpdated = (callback: (session: Session) => void) => {
-    return on("SessionUpdated", callback);
+    return on("sessionUpdated", callback);
   };
 
   const onSessionDeleted = (callback: (sessionId: string) => void) => {
-    return on("SessionDeleted", callback);
+    return on("sessionDeleted", callback);
   };
 
   const onNewEvent = (callback: (event: SessionEvent) => void) => {
-    return on("NewEvent", callback);
+    return on("newEvent", callback);
   };
 
   return (

@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { PublicSessionPixelProgress } from "@/components/pixel-progress";
-import { EventTimeline, type BaseEvent } from "@/components/events";
+import { EventTimeline, LastActionIndicator, type BaseEvent } from "@/components/events";
 
 const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
   "claude-code": {
@@ -230,7 +230,12 @@ function PublicSessionView({
                 )}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Last action indicator */}
+              <LastActionIndicator
+                event={events.length > 0 ? events[0] as BaseEvent : null}
+                showFullDetails={isFullVisibility}
+              />
               <EventTimeline
                 events={events as BaseEvent[]}
                 eventsTotal={eventsTotal}

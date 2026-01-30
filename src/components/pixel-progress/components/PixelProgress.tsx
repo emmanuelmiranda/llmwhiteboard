@@ -447,44 +447,46 @@ export function PixelProgress({
           </div>
         )}
 
-        {/* Expand button (only when not expanded) */}
-        {expandable && !expanded && (
-          <button
-            onClick={() => handleExpandChange(true)}
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              padding: '4px 8px',
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              opacity: 0,
-              transition: 'opacity 0.2s',
-            }}
-            className="expand-button"
-          >
-            ⛶
-          </button>
-        )}
-
-        {/* Scroll indicators and controls */}
+        {/* Top toolbar - horizontal, shows on hover or when expanded */}
         <div
           style={{
             position: 'absolute',
+            top: '4px',
+            left: '4px',
             right: '4px',
-            top: '50%',
-            transform: 'translateY(-50%)',
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
             gap: '4px',
-            opacity: 0.8,
+            opacity: expanded ? 1 : 0,
+            transition: 'opacity 0.2s',
+            pointerEvents: expanded ? 'auto' : 'none',
           }}
-          className="scroll-indicators"
+          className="canvas-toolbar"
         >
+          {/* Expand/Collapse button */}
+          {expandable && (
+            <button
+              onClick={() => handleExpandChange(!expanded)}
+              style={{
+                width: '24px',
+                height: '20px',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title={expanded ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {expanded ? '✕' : '⛶'}
+            </button>
+          )}
+
+          {/* Scroll buttons - only when there's content to scroll */}
           {(construction?.pieces.length ?? 0) > 10 && (
             <>
               <button
@@ -527,6 +529,7 @@ export function PixelProgress({
               </button>
             </>
           )}
+
           {/* Reset button */}
           <button
             onClick={reset}
@@ -547,6 +550,7 @@ export function PixelProgress({
           >
             ↺
           </button>
+
           {/* Speed control button */}
           <button
             onClick={cycleSpeed}
@@ -568,6 +572,7 @@ export function PixelProgress({
           >
             {currentSpeed}x
           </button>
+
           {/* Sound toggle button */}
           {onSoundToggle && (
             <button
@@ -595,6 +600,7 @@ export function PixelProgress({
               {soundEnabled ? '🔊' : '🔇'}
             </button>
           )}
+
           {/* Synth control button */}
           {soundEnabled && (
             <button
@@ -619,45 +625,6 @@ export function PixelProgress({
           )}
         </div>
 
-        {/* Controls */}
-        {(showControls || expanded) && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: showProgress ? '12px' : '8px',
-              left: '8px',
-              display: 'flex',
-              gap: '8px',
-            }}
-          >
-            <button
-              onClick={reset}
-              style={{
-                padding: '4px 8px',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '11px',
-              }}
-            >
-              Reset
-            </button>
-
-            <span
-              style={{
-                padding: '4px 8px',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '11px',
-              }}
-            >
-              {phase} • {construction?.pieces.length ?? 0} pieces
-            </span>
-          </div>
-        )}
 
         {/* Completion overlay */}
         {isComplete && config?.showSummaryOnComplete && (
@@ -665,8 +632,9 @@ export function PixelProgress({
         )}
 
         <style jsx>{`
-          .pixel-progress-container:hover .expand-button {
+          .pixel-progress-container:hover .canvas-toolbar {
             opacity: 1 !important;
+            pointer-events: auto !important;
           }
         `}</style>
       </div>

@@ -2,6 +2,7 @@ export { EventTimeline } from "./EventTimeline";
 export { EventItem } from "./EventItem";
 export { SessionBlock } from "./SessionBlock";
 export { CompactionBlock } from "./CompactionBlock";
+export { LastActionIndicator } from "./LastActionIndicator";
 export { groupEventsIntoBlocks, getEventIconInfo } from "./event-utils";
 export type {
   BaseEvent,

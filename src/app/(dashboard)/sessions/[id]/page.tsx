@@ -46,7 +46,7 @@ import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ShareDialog } from "@/components/share-dialog";
 import { SessionPixelProgress } from "@/components/pixel-progress";
-import { EventTimeline, type BaseEvent } from "@/components/events";
+import { EventTimeline, LastActionIndicator, type BaseEvent } from "@/components/events";
 
 interface SessionEvent {
   id: string;
@@ -606,7 +606,12 @@ export default function SessionDetailPage({
                 )}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Last action indicator */}
+              <LastActionIndicator
+                event={events.length > 0 ? events[0] as BaseEvent : null}
+                showFullDetails={true}
+              />
               <EventTimeline
                 events={events as BaseEvent[]}
                 eventsTotal={eventsTotal}

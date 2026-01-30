@@ -95,6 +95,9 @@ export function usePixelProgress(
   // State machine for builder - single source of truth
   const stateMachineRef = useRef<BuilderStateMachine>(new BuilderStateMachine())
 
+  // Track categories for on-complete sound mode
+  const currentBlockCategoriesRef = useRef<string[]>([])
+
   // Animation state
   const [construction, setConstruction] = useState<Construction | null>(null)
   const [builderState, setBuilderState] = useState<BuilderState>('idle')
@@ -117,6 +120,7 @@ export function usePixelProgress(
     const sm = stateMachineRef.current
     sm.reset()
     builderStateRef.current = 'idle'
+    currentBlockCategoriesRef.current = [] // Clear sound buffer for new session
     bubbleInfoRef.current = null
     setBuilderState('idle')
     setBubbleInfo(null)
@@ -344,7 +348,51 @@ export function usePixelProgress(
     }
 
     // Play sound for every event
-    soundEngine.playForCategory(event.category, toolName)
+    const soundMode = soundEngine.getSoundMode()
+    const isEnabled = soundEngine.isEnabled()
+
+    console.log('[usePixelProgress] Sound event:', {
+      category: event.category,
+      soundMode,
+      isEnabled,
+      bufferLength: currentBlockCategoriesRef.current.length,
+    })
+
+    // Special handling for compaction - play chord collapse instead of regular note
+    if (event.category === 'optimize') {
+      console.log('[usePixelProgress] Compaction detected, playing chord collapse with', currentBlockCategoriesRef.current.length, 'categories')
+      soundEngine.playCompactionSound(currentBlockCategoriesRef.current)
+      currentBlockCategoriesRef.current = []
+      soundEngine.setCurrentCategories([])
+    } else if (soundMode === 'on-complete') {
+      // On-complete mode: collect categories and play on end/attention events
+      currentBlockCategoriesRef.current.push(event.category)
+      soundEngine.setCurrentCategories(currentBlockCategoriesRef.current)
+
+      const isAttentionNeeded = event.category === 'wait' || event.category === 'input'
+      const isEndEvent = event.category === 'end' || event.category === 'stop' || event.category === 'success'
+
+      console.log('[usePixelProgress] On-complete mode:', {
+        isAttentionNeeded,
+        isEndEvent,
+        bufferAfterPush: currentBlockCategoriesRef.current.length,
+      })
+
+      if (isAttentionNeeded) {
+        // Play sequence twice for attention
+        console.log('[usePixelProgress] Playing attention sequence')
+        soundEngine.playSequence(currentBlockCategoriesRef.current, { times: 2 })
+      } else if (isEndEvent) {
+        // Play sequence once on end, then clear
+        console.log('[usePixelProgress] Playing end sequence')
+        soundEngine.playSequence(currentBlockCategoriesRef.current, { times: 1 })
+        currentBlockCategoriesRef.current = []
+        soundEngine.setCurrentCategories([])
+      }
+    } else {
+      // Realtime mode: play immediately
+      soundEngine.playForCategory(event.category, toolName)
+    }
 
     // Process event in construction engine
     const result = engine.processEvent(event)

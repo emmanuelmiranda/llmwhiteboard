@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { SoundEngine, getSoundEngine, type SynthConfiguration } from '@/components/pixel-progress/core/SoundEngine'
+import { SoundEngine, getSoundEngine, type SynthConfiguration, type SoundMode, type ScaleType, type RootNote } from '@/components/pixel-progress/core/SoundEngine'
 import { X } from 'lucide-react'
 
 // =============================================================================
@@ -224,6 +224,19 @@ export function SynthControlPanel({
     return soundEngine.getConfiguredSynth()
   })
 
+  // Sound mode state
+  const [soundMode, setSoundMode] = useState<SoundMode>(() => {
+    const soundEngine = getSoundEngine()
+    return soundEngine.getSoundMode()
+  })
+
+  // Update sound mode
+  const updateSoundMode = useCallback((mode: SoundMode) => {
+    const soundEngine = getSoundEngine()
+    soundEngine.setSoundMode(mode)
+    setSoundMode(mode)
+  }, [])
+
   // Update config on a parameter change - takes effect immediately
   const updateConfig = useCallback(<K extends keyof SynthConfiguration>(
     key: K,
@@ -297,25 +310,134 @@ export function SynthControlPanel({
         </div>
 
         <div className="p-3 space-y-3">
-          {/* Status indicator */}
-          <div className="text-xs text-center text-muted-foreground bg-muted/50 rounded py-1">
-            Changes apply instantly
+          {/* Sound Mode Toggle */}
+          <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+            <div>
+              <Label className="text-xs font-medium">Playback Mode</Label>
+              <p className="text-xs text-muted-foreground">
+                {soundMode === 'realtime' ? 'Play sounds as events happen' : 'Play sequence when block ends'}
+              </p>
+            </div>
+            <Select
+              value={soundMode}
+              onValueChange={(value) => updateSoundMode(value as SoundMode)}
+            >
+              <SelectTrigger className="h-7 w-28 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[10002]">
+                <SelectItem value="realtime" className="text-xs">Realtime</SelectItem>
+                <SelectItem value="on-complete" className="text-xs">On Complete</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* Scale Selection */}
+          <Section title="Scale">
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs text-muted-foreground">Root</Label>
+                <Select
+                  value={config.scaleRoot ?? 'C'}
+                  onValueChange={(value) => updateConfig('scaleRoot', value as RootNote)}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[10002] max-h-60">
+                    {SoundEngine.getRootNotes().map((note) => (
+                      <SelectItem key={note} value={note} className="text-xs">
+                        {note}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-[2] space-y-1">
+                <Label className="text-xs text-muted-foreground">Type</Label>
+                <Select
+                  value={config.scaleType ?? 'pentatonic'}
+                  onValueChange={(value) => updateConfig('scaleType', value as ScaleType)}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[10002] max-h-60">
+                    {SoundEngine.getScaleTypes().map((scale) => (
+                      <SelectItem key={scale} value={scale} className="text-xs">
+                        {scale.charAt(0).toUpperCase() + scale.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Slider
+              label="Octave Shift"
+              value={config.octaveShift ?? 0}
+              min={-2}
+              max={2}
+              step={1}
+              onChange={(v) => updateConfig('octaveShift', v)}
+            />
+          </Section>
 
           {/* Mini Keyboard */}
           <MiniKeyboard />
 
-          {/* Action Buttons */}
-          <div className="flex gap-1">
-            <Button onClick={playTestSequence} variant="outline" size="sm" className="flex-1 text-xs h-7">
-              Sequence
-            </Button>
-            {onReplay && (
-              <Button onClick={onReplay} variant="default" size="sm" className="flex-1 text-xs h-7">
-                Replay
-              </Button>
-            )}
-          </div>
+          {/* Playback Section */}
+          <Section title="Playback">
+            <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
+              <div className="flex justify-between">
+                <span>Last sequence:</span>
+                <span className="font-mono">{getSoundEngine().getLastSequenceCount()} notes</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Current buffer:</span>
+                <span className="font-mono">{getSoundEngine().getCurrentCategoriesCount()} notes</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-1">
+                <Button
+                  onClick={() => {
+                    const soundEngine = getSoundEngine()
+                    soundEngine.unlockAudio()
+                    soundEngine.replayLastSequence()
+                  }}
+                  variant="default"
+                  size="sm"
+                  className="flex-1 text-xs h-7"
+                  title="Replay the last completed sequence"
+                >
+                  Replay Last
+                </Button>
+                <Button
+                  onClick={() => {
+                    const soundEngine = getSoundEngine()
+                    soundEngine.unlockAudio()
+                    soundEngine.playCurrentBuffer()
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs h-7"
+                  title="Preview notes collected so far"
+                >
+                  Preview Current
+                </Button>
+              </div>
+              <div className="flex gap-1">
+                <Button onClick={playTestSequence} variant="ghost" size="sm" className="flex-1 text-xs h-7">
+                  Test Scale
+                </Button>
+                <Button onClick={playTestNote} variant="ghost" size="sm" className="flex-1 text-xs h-7">
+                  Test Note
+                </Button>
+              </div>
+            </div>
+          </Section>
 
           {/* Oscillator Section */}
           <Section title="Oscillator">

@@ -97,12 +97,13 @@ export function PublicSignalRProvider({ token, children }: PublicSignalRProvider
     leaveSession,
   } = usePublicSignalR({ token, enabled: !!token });
 
+  // Note: SignalR normalizes method names to lowercase when using System.Text.Json
   const onSessionUpdated = useCallback((callback: (session: PublicSession) => void) => {
-    return on("PublicSessionUpdated", callback);
+    return on("publicSessionUpdated", callback);
   }, [on]);
 
   const onNewEvent = useCallback((callback: (event: PublicEvent) => void) => {
-    return on("PublicNewEvent", callback);
+    return on("publicNewEvent", callback);
   }, [on]);
 
   return (
