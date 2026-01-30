@@ -46,7 +46,7 @@ import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ShareDialog } from "@/components/share-dialog";
 import { SessionPixelProgress } from "@/components/pixel-progress";
-import { EventTimeline, LastActionIndicator, type BaseEvent } from "@/components/events";
+import { EventsCard, type BaseEvent } from "@/components/events";
 
 interface SessionEvent {
   id: string;
@@ -137,8 +137,6 @@ export default function SessionDetailPage({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [copiedSnapshotId, setCopiedSnapshotId] = useState<string | null>(null);
-  // Expanded session blocks (by session_start event id)
-  const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
   // Glowing events for real-time updates
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
   // Sound toggle for pixel progress
@@ -595,47 +593,15 @@ export default function SessionDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Events</CardTitle>
-              <CardDescription>
-                {eventsTotal > 0 ? (
-                  <>Showing {events.length} of {eventsTotal} events</>
-                ) : (
-                  "Activity from this session"
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Last action indicator */}
-              <LastActionIndicator
-                event={events.length > 0 ? events[0] as BaseEvent : null}
-                showFullDetails={true}
-              />
-              <EventTimeline
-                events={events as BaseEvent[]}
-                eventsTotal={eventsTotal}
-                eventsLoading={eventsLoading}
-                glowingEventIds={glowingEventIds}
-                expandedBlocks={expandedBlocks}
-                onToggleBlock={(blockId) => {
-                  setExpandedBlocks(prev => {
-                    const next = new Set(prev);
-                    if (next.has(blockId)) {
-                      next.delete(blockId);
-                    } else {
-                      next.add(blockId);
-                    }
-                    return next;
-                  });
-                }}
-                onLoadMore={() => loadEvents(events.length, true)}
-                hasMore={events.length < eventsTotal}
-                showFullDetails={true}
-                groupIntoBlocks={true}
-              />
-            </CardContent>
-          </Card>
+          <EventsCard
+            events={events as BaseEvent[]}
+            eventsTotal={eventsTotal}
+            eventsLoading={eventsLoading}
+            glowingEventIds={glowingEventIds}
+            onLoadMore={() => loadEvents(events.length, true)}
+            hasMore={events.length < eventsTotal}
+            showFullDetails={true}
+          />
         </div>
 
         <div className="space-y-6">

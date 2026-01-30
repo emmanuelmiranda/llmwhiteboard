@@ -369,7 +369,7 @@ export function usePixelProgress(
       currentBlockCategoriesRef.current.push(event.category)
       soundEngine.setCurrentCategories(currentBlockCategoriesRef.current)
 
-      const isAttentionNeeded = event.category === 'wait' || event.category === 'input'
+      const isAttentionNeeded = event.category === 'wait' || event.category === 'input' || eventType === 'permission_request'
       const isEndEvent = event.category === 'end' || event.category === 'stop' || event.category === 'success'
       const isNewPrompt = eventType === 'user_prompt'
 

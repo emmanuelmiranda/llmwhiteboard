@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { PublicSessionPixelProgress } from "@/components/pixel-progress";
-import { EventTimeline, LastActionIndicator, type BaseEvent } from "@/components/events";
+import { EventsCard, type BaseEvent } from "@/components/events";
 
 const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
   "claude-code": {
@@ -60,7 +60,6 @@ function PublicSessionView({
   const [eventsLoading, setEventsLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
   const [soundEnabled, setSoundEnabled] = useState(false);
 
@@ -217,49 +216,15 @@ function PublicSessionView({
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Events</CardTitle>
-              <CardDescription>
-                {eventsTotal > 0 ? (
-                  <>
-                    Showing {events.length} of {eventsTotal} events
-                  </>
-                ) : (
-                  "Activity from this session"
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Last action indicator */}
-              <LastActionIndicator
-                event={events.length > 0 ? events[0] as BaseEvent : null}
-                showFullDetails={isFullVisibility}
-              />
-              <EventTimeline
-                events={events as BaseEvent[]}
-                eventsTotal={eventsTotal}
-                eventsLoading={eventsLoading}
-                glowingEventIds={glowingEventIds}
-                expandedBlocks={expandedBlocks}
-                onToggleBlock={(blockId) => {
-                  setExpandedBlocks(prev => {
-                    const next = new Set(prev);
-                    if (next.has(blockId)) {
-                      next.delete(blockId);
-                    } else {
-                      next.add(blockId);
-                    }
-                    return next;
-                  });
-                }}
-                onLoadMore={() => loadEvents(events.length, true)}
-                hasMore={events.length < eventsTotal}
-                showFullDetails={isFullVisibility}
-                groupIntoBlocks={true}
-              />
-            </CardContent>
-          </Card>
+          <EventsCard
+            events={events as BaseEvent[]}
+            eventsTotal={eventsTotal}
+            eventsLoading={eventsLoading}
+            glowingEventIds={glowingEventIds}
+            onLoadMore={() => loadEvents(events.length, true)}
+            hasMore={events.length < eventsTotal}
+            showFullDetails={isFullVisibility}
+          />
         </div>
 
         <div className="space-y-6">

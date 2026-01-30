@@ -3,6 +3,7 @@ export { EventItem } from "./EventItem";
 export { SessionBlock } from "./SessionBlock";
 export { CompactionBlock } from "./CompactionBlock";
 export { LastActionIndicator } from "./LastActionIndicator";
+export { EventsCard } from "./EventsCard";
 export { groupEventsIntoBlocks, getEventIconInfo } from "./event-utils";
 export type {
   BaseEvent,
