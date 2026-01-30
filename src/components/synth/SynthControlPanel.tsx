@@ -25,6 +25,14 @@ import { X } from 'lucide-react'
 // TYPES
 // =============================================================================
 
+export type VisualTheme = 'lego' | 'painter' | 'garden'
+
+const THEME_OPTIONS: { value: VisualTheme; label: string; description: string }[] = [
+  { value: 'lego', label: 'Lego', description: 'Colorful building blocks' },
+  { value: 'painter', label: 'Painter', description: 'Artistic brush strokes' },
+  { value: 'garden', label: 'Garden', description: 'Growing plants and flowers' },
+]
+
 export interface SynthControlPanelProps {
   /** Callback when settings change */
   onSettingsChange?: (config: SynthConfiguration) => void
@@ -34,6 +42,10 @@ export interface SynthControlPanelProps {
   open?: boolean
   /** Callback when panel open state changes */
   onOpenChange?: (open: boolean) => void
+  /** Current visual theme */
+  visualTheme?: VisualTheme
+  /** Callback when visual theme changes */
+  onVisualThemeChange?: (theme: VisualTheme) => void
 }
 
 // =============================================================================
@@ -217,6 +229,8 @@ export function SynthControlPanel({
   onReplay,
   open = false,
   onOpenChange,
+  visualTheme = 'lego',
+  onVisualThemeChange,
 }: SynthControlPanelProps) {
   // Get sound engine and initial config
   const [config, setConfig] = useState<SynthConfiguration>(() => {
@@ -310,6 +324,29 @@ export function SynthControlPanel({
         </div>
 
         <div className="p-3 space-y-3">
+          {/* Visual Theme Selection */}
+          {onVisualThemeChange && (
+            <div className="p-2 bg-muted/50 rounded space-y-2">
+              <Label className="text-xs font-medium">Visual Theme</Label>
+              <div className="flex gap-1">
+                {THEME_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => onVisualThemeChange(option.value)}
+                    className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                      visualTheme === option.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary hover:bg-secondary/80'
+                    }`}
+                    title={option.description}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Sound Mode Toggle */}
           <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
             <div>

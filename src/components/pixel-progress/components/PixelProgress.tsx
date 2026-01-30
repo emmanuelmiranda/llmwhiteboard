@@ -65,6 +65,9 @@ export interface PixelProgressProps {
   /** Sound volume (0-1) */
   soundVolume?: number
 
+  /** Callback when theme changes */
+  onThemeChange?: (theme: string) => void
+
   /** Callbacks */
   onPhaseChange?: (phase: Construction['phase']) => void
   onProgress?: (progress: number) => void
@@ -99,6 +102,7 @@ export function PixelProgress({
   soundEnabled = false,
   onSoundToggle,
   soundVolume = 0.3,
+  onThemeChange,
   onPhaseChange,
   onProgress,
   onComplete,
@@ -650,6 +654,8 @@ export function PixelProgress({
             processEvents(events)
           }, 50)
         }}
+        visualTheme={themeId as 'lego' | 'painter' | 'garden'}
+        onVisualThemeChange={onThemeChange}
       />
     </>
   )

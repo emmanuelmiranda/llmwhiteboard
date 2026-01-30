@@ -62,6 +62,7 @@ function PublicSessionView({
   const [error, setError] = useState<string | null>(null);
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [visualTheme, setVisualTheme] = useState<"lego" | "painter" | "garden">("lego");
 
   const { onSessionUpdated, onNewEvent, joinSession, leaveSession, connectionState } =
     usePublicSignalRContext();
@@ -238,13 +239,14 @@ function PublicSessionView({
                 <PublicSessionPixelProgress
                   token={token}
                   sessionId={shareInfo.sessionId}
-                  theme="lego"
+                  theme={visualTheme}
                   size="sm"
                   soundEnabled={soundEnabled}
                   onSoundToggle={setSoundEnabled}
                   soundVolume={0.3}
                   showProgress={true}
                   expandable={true}
+                  onThemeChange={(theme) => setVisualTheme(theme as "lego" | "painter" | "garden")}
                 />
               </CardContent>
             </Card>

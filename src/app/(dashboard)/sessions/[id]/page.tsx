@@ -139,8 +139,9 @@ export default function SessionDetailPage({
   const [copiedSnapshotId, setCopiedSnapshotId] = useState<string | null>(null);
   // Glowing events for real-time updates
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
-  // Sound toggle for pixel progress
+  // Pixel progress settings
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [visualTheme, setVisualTheme] = useState<"lego" | "painter" | "garden">("lego");
   const router = useRouter();
   const { toast } = useToast();
   const {
@@ -619,8 +620,10 @@ export default function SessionDetailPage({
                 <SessionPixelProgress
                   sessionId={session.id}
                   size="full"
+                  theme={visualTheme}
                   soundEnabled={soundEnabled}
                   onSoundToggle={setSoundEnabled}
+                  onThemeChange={(theme) => setVisualTheme(theme as "lego" | "painter" | "garden")}
                 />
               </div>
             </CardContent>

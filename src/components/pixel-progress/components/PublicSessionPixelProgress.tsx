@@ -32,6 +32,8 @@ export interface PublicSessionPixelProgressProps
   onSoundToggle?: (enabled: boolean) => void
   /** Sound volume (0-1) */
   soundVolume?: number
+  /** Callback when theme changes */
+  onThemeChange?: (theme: string) => void
 }
 
 /**
@@ -58,6 +60,7 @@ export function PublicSessionPixelProgress({
   soundEnabled = false,
   onSoundToggle,
   soundVolume = 0.3,
+  onThemeChange,
   ...props
 }: PublicSessionPixelProgressProps) {
   const signalR = usePublicSignalRContext()
@@ -144,6 +147,7 @@ export function PublicSessionPixelProgress({
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
       soundVolume={soundVolume}
+      onThemeChange={onThemeChange}
       {...props}
     />
   )
