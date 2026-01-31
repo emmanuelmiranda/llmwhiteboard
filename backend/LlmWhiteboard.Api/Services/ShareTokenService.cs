@@ -61,8 +61,11 @@ public class ShareTokenService : IShareTokenService
 
     public async Task<ShareToken?> ValidateTokenAsync(string token)
     {
-        if (!token.StartsWith(TokenPrefix))
+        if (!token.StartsWith(TokenPrefix, StringComparison.OrdinalIgnoreCase))
             return null;
+
+        // Normalize to lowercase since tokens are stored lowercase
+        token = token.ToLowerInvariant();
 
         var shareToken = await _db.ShareTokens
             .Include(t => t.User)

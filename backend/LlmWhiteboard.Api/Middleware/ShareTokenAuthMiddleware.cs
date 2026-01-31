@@ -24,7 +24,7 @@ public class ShareTokenAuthMiddleware
             var token = context.Request.Query["token"].FirstOrDefault()
                 ?? context.Request.Headers["X-Share-Token"].FirstOrDefault();
 
-            if (!string.IsNullOrEmpty(token) && token.StartsWith("lwb_sh_"))
+            if (!string.IsNullOrEmpty(token) && token.StartsWith("lwb_sh_", StringComparison.OrdinalIgnoreCase))
             {
                 var shareToken = await shareTokenService.ValidateTokenAsync(token);
 
