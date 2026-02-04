@@ -68,7 +68,7 @@ export function SessionBlock({
               {showFullDetails && stopEvent.summary ? ` - ${stopEvent.summary}` : ""}
             </p>
           ) : firstPrompt ? (
-            <p className="text-sm text-foreground mt-1 truncate">
+            <p className="text-sm text-foreground mt-1 break-words">
               {showFullDetails ? (firstPrompt.summary || "User prompt") : "User prompt"}
             </p>
           ) : null}

@@ -19,23 +19,60 @@ export function EventItem({ event, isGlowing, showFullDetails = true, compact = 
         <Icon className={`h-4 w-4 mt-0.5 ${iconColor} flex-shrink-0`} />
         <div className="flex-1 min-w-0">
           {isUserPrompt ? (
-            <p className="text-foreground">
-              {showFullDetails ? (event.summary || "User prompt") : "User prompt"}
-            </p>
+            <>
+              <p className="text-foreground">
+                {showFullDetails ? (event.summary || "User prompt") : "User prompt"}
+              </p>
+              {showFullDetails && event.metadata?.input != null && (
+                <div className="mt-2">
+                  <pre className="p-2 bg-blue-50 dark:bg-blue-950/50 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
+                    {typeof event.metadata.input === 'object' && 'message' in event.metadata.input
+                      ? String((event.metadata.input as { message: string }).message)
+                      : JSON.stringify(event.metadata.input, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </>
+          ) : event.eventType === 'agent_response' ? (
+            <>
+              <Badge variant="outline" className="text-xs">
+                {event.toolName || 'Response'}
+              </Badge>
+              {showFullDetails && event.metadata?.output != null && (
+                <div className="mt-2">
+                  <pre className="p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    {typeof event.metadata.output === 'string' ? event.metadata.output : JSON.stringify(event.metadata.output, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </>
           ) : (
             <>
               <Badge variant="outline" className="text-xs">
                 {event.toolName || event.eventType}
               </Badge>
               {showFullDetails && event.summary && (
-                <p className="text-muted-foreground mt-1 truncate">
+                <p className="text-muted-foreground mt-1 break-words">
                   {event.summary}
                 </p>
               )}
               {showFullDetails && isToolUse && event.metadata?.input != null && (
-                <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-32 overflow-y-auto">
-                  {JSON.stringify(event.metadata.input as object, null, 2)}
-                </pre>
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Input:</div>
+                    <pre className="p-2 bg-muted rounded text-xs overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(event.metadata.input as object, null, 2)}
+                    </pre>
+                  </div>
+                  {event.metadata.output != null && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
+                      <pre className="p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
+                        {typeof event.metadata.output === 'string' ? event.metadata.output : JSON.stringify(event.metadata.output as object, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -78,15 +115,44 @@ export function EventItem({ event, isGlowing, showFullDetails = true, compact = 
               </Badge>
             )}
           </div>
-          {showFullDetails && event.summary && (
+          {showFullDetails && event.summary && !event.metadata?.input && (
             <p className={`text-sm mt-1 ${isUserPrompt ? "text-foreground" : "text-muted-foreground"}`}>
               {event.summary}
             </p>
           )}
+          {showFullDetails && isUserPrompt && event.metadata?.input != null && (
+            <div className="mt-2">
+              <pre className="p-2 bg-blue-50 dark:bg-blue-950/50 rounded text-xs overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
+                {typeof event.metadata.input === 'object' && 'message' in event.metadata.input
+                  ? String((event.metadata.input as { message: string }).message)
+                  : JSON.stringify(event.metadata.input, null, 2)}
+              </pre>
+            </div>
+          )}
+          {showFullDetails && event.eventType === 'agent_response' && event.metadata?.output != null && (
+            <div className="mt-2">
+              <pre className="p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                {typeof event.metadata.output === 'string' ? event.metadata.output : JSON.stringify(event.metadata.output, null, 2)}
+              </pre>
+            </div>
+          )}
           {showFullDetails && isToolUse && event.metadata?.input != null && (
-            <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-32 overflow-y-auto">
-              {JSON.stringify(event.metadata.input as object, null, 2)}
-            </pre>
+            <div className="mt-2 space-y-2">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">Input:</div>
+                <pre className="p-2 bg-muted rounded text-xs overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                  {JSON.stringify(event.metadata.input as object, null, 2)}
+                </pre>
+              </div>
+              {event.metadata.output != null && (
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
+                  <pre className="p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
+                    {typeof event.metadata.output === 'string' ? event.metadata.output : JSON.stringify(event.metadata.output as object, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
           )}
         </div>
         <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">

@@ -112,7 +112,7 @@ export function LastActionIndicator({ event, showFullDetails = true }: LastActio
           </span>
         </div>
         {summary && (
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          <p className="text-xs text-muted-foreground mt-0.5 break-words">
             {summary}
           </p>
         )}

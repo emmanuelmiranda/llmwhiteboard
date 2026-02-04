@@ -498,19 +498,19 @@ export default function SessionDetailPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-4 min-w-0">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="flex-shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">
+            <h1 className="text-xl sm:text-2xl font-bold break-words">
               {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
             </h1>
-            <div className="flex items-center text-sm text-muted-foreground mt-1">
-              <Folder className="h-4 w-4 mr-1 flex-shrink-0" />
-              <span className="truncate">{session.projectPath}</span>
+            <div className="flex items-start text-sm text-muted-foreground mt-1">
+              <Folder className="h-4 w-4 mr-1 mt-0.5 flex-shrink-0" />
+              <span className="break-all">{session.projectPath}</span>
             </div>
           </div>
         </div>
@@ -765,8 +765,8 @@ export default function SessionDetailPage({
               <p className="text-sm text-muted-foreground">
                 To resume this session on another machine, run:
               </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 bg-muted rounded text-xs overflow-x-auto break-all">
+              <div className="flex items-start gap-2">
+                <code className="flex-1 p-2 bg-muted rounded text-xs break-all">
                   npx llmwhiteboard resume {session.id}
                 </code>
                 <Button size="icon" variant="outline" onClick={copyResumeCommand} className="flex-shrink-0">

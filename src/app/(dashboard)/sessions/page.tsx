@@ -194,8 +194,8 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-6 overflow-x-hidden">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Sessions</h1>
           <p className="text-muted-foreground">
@@ -223,9 +223,9 @@ export default function SessionsPage() {
           <Button type="submit">Search</Button>
         </form>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap w-full sm:w-auto">
           <Select value={stateFilter} onValueChange={setStateFilter}>
-            <SelectTrigger className="w-[130px] sm:w-[150px]">
+            <SelectTrigger className="w-[calc(50%-4px)] sm:w-[150px]">
               <SelectValue placeholder="State" />
             </SelectTrigger>
             <SelectContent>
@@ -270,7 +270,7 @@ export default function SessionsPage() {
           </Select>
 
           <Select value={cliFilter} onValueChange={setCliFilter}>
-            <SelectTrigger className="w-[120px] sm:w-[140px]">
+            <SelectTrigger className="w-[calc(50%-4px)] sm:w-[140px]">
               <SelectValue placeholder="CLI Tool" />
             </SelectTrigger>
             <SelectContent>
@@ -290,9 +290,9 @@ export default function SessionsPage() {
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 w-full sm:w-auto">
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[130px] sm:w-[150px]">
+              <SelectTrigger className="flex-1 sm:flex-none sm:w-[150px]">
                 <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
