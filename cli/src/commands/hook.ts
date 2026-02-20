@@ -154,6 +154,7 @@ async function uploadTranscript(
         suggestedTitle,
         cliType: context.cliType,
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
@@ -263,6 +264,7 @@ export async function hookCommand(cliType: CliType = "claude-code"): Promise<voi
         Authorization: `Bearer ${config.token}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000),
     });
 
     let syncSessionId: string | undefined;
@@ -309,4 +311,7 @@ export async function hookCommand(cliType: CliType = "claude-code"): Promise<voi
   } catch (err) {
     console.error(`LLM Whiteboard hook error: ${err instanceof Error ? err.message : err}`);
   }
+  // Force exit so dangling HTTP connections don't keep the process alive
+  // and block Claude Code's hook pipeline
+  process.exit(0);
 }

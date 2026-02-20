@@ -130,7 +130,7 @@ async function main() {
       timestamp: new Date().toISOString(),
     };
 
-    // Send to API
+    // Send to API (5s timeout to prevent blocking Claude Code hooks)
     const response = await fetch(`${config.apiUrl}/api/sync`, {
       method: "POST",
       headers: {
@@ -138,6 +138,7 @@ async function main() {
         Authorization: `Bearer ${config.token}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
@@ -153,6 +154,9 @@ async function main() {
     // Silently fail to not interrupt Claude Code
     console.error(`LLM Whiteboard hook error: ${err instanceof Error ? err.message : err}`);
   }
+  // Force exit so dangling HTTP connections don't keep the process alive
+  // and block Claude Code's hook pipeline
+  process.exit(0);
 }
 
 function extractFirstUserMessage(transcriptContent: string): string | undefined {
@@ -242,6 +246,7 @@ async function uploadTranscript(
         checksum,
         suggestedTitle,
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {

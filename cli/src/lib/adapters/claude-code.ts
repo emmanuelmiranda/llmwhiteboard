@@ -125,6 +125,17 @@ export class ClaudeCodeAdapter implements CliAdapter {
   getHookConfig(hookCommand: string): HookConfiguration {
     const hooks: Record<string, HookEntry[]> = {};
 
+    // Hooks that only send telemetry and don't need to block Claude Code
+    const asyncHooks = new Set([
+      "SessionStart",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PermissionRequest",
+      "SubagentStop",
+      "PreCompact",
+    ]);
+
     for (const hookName of this.getDefaultHooks()) {
       // PostToolUse needs a matcher to match all tools
       // PreToolUse only matches AskUserQuestion to detect when waiting for user input
@@ -134,7 +145,8 @@ export class ClaudeCodeAdapter implements CliAdapter {
       } else if (hookName === "PreToolUse") {
         matcher = "AskUserQuestion";
       }
-      hooks[hookName] = [this.createHookEntry(hookCommand, matcher)];
+      const isAsync = asyncHooks.has(hookName);
+      hooks[hookName] = [this.createHookEntry(hookCommand, matcher, isAsync)];
     }
 
     return {
@@ -143,9 +155,13 @@ export class ClaudeCodeAdapter implements CliAdapter {
     };
   }
 
-  createHookEntry(command: string, matcher?: string): HookEntry {
+  createHookEntry(command: string, matcher?: string, isAsync?: boolean): HookEntry {
+    const hookDef: HookEntry["hooks"][0] = { type: "command", command };
+    if (isAsync) {
+      hookDef.async = true;
+    }
     const entry: HookEntry = {
-      hooks: [{ type: "command", command }],
+      hooks: [hookDef],
     };
     if (matcher !== undefined) {
       entry.matcher = matcher;

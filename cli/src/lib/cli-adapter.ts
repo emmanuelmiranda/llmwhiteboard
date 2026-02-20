@@ -76,7 +76,7 @@ export interface HookConfiguration {
 // Hook entry format (varies by CLI but has common structure)
 export interface HookEntry {
   matcher?: string;
-  hooks: Array<{ type: string; command: string }>;
+  hooks: Array<{ type: string; command: string; async?: boolean }>;
 }
 
 // CLI Adapter interface
@@ -98,7 +98,7 @@ export interface CliAdapter {
   getSupportedHooks(): string[];
   getDefaultHooks(): string[];
   getHookConfig(hookCommand: string): HookConfiguration;
-  createHookEntry(command: string, matcher?: string): HookEntry;
+  createHookEntry(command: string, matcher?: string, isAsync?: boolean): HookEntry;
 
   // Settings manipulation
   readSettings(scope: "user" | "project", projectPath?: string): Promise<Record<string, unknown>>;
