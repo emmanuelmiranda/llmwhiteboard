@@ -13,6 +13,7 @@ import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ActivityStats } from "@/components/activity-stats";
 import { SessionPixelProgress, TimelinePixelProgress } from "@/components/pixel-progress";
+import { getToolDisplayInfo, getAskUserAnswer, getPermissionRequestInfo } from "@/components/events/event-utils";
 
 interface TimelineSession {
   id: string;
@@ -84,127 +85,6 @@ interface TimelineEvent {
   summary: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
-}
-
-// Extract the most useful info from tool metadata for display
-function getToolDisplayInfo(toolName: string | null, metadata: Record<string, unknown> | null): string | null {
-  if (!toolName || !metadata) return null;
-
-  const input = metadata.input as Record<string, unknown> | undefined;
-  if (!input) return null;
-
-  const tool = toolName.toLowerCase();
-
-  // File operations - show the file path/name
-  if (tool === "read" || tool === "write" || tool === "edit" || tool === "notebookedit") {
-    const filePath = (input.file_path || input.path || input.notebook_path) as string | undefined;
-    if (filePath) {
-      // Show just the filename, not full path
-      const fileName = filePath.split(/[/\\]/).pop();
-      return fileName || filePath;
-    }
-  }
-
-  // Search operations - show the pattern
-  if (tool === "grep") {
-    const pattern = input.pattern as string | undefined;
-    if (pattern) {
-      return pattern.length > 50 ? pattern.slice(0, 50) + "..." : pattern;
-    }
-  }
-
-  if (tool === "glob") {
-    const pattern = input.pattern as string | undefined;
-    if (pattern) return pattern;
-  }
-
-  // Bash - show first line of command
-  if (tool === "bash") {
-    const command = input.command as string | undefined;
-    if (command) {
-      return command.split("\n")[0];
-    }
-  }
-
-  // Web operations
-  if (tool === "webfetch" || tool === "websearch") {
-    const url = input.url as string | undefined;
-    const query = input.query as string | undefined;
-    if (url) {
-      try {
-        return new URL(url).hostname;
-      } catch {
-        return url.slice(0, 40);
-      }
-    }
-    if (query) return query.length > 50 ? query.slice(0, 50) + "..." : query;
-  }
-
-  // Task tool - show description
-  if (tool === "task") {
-    const description = input.description as string | undefined;
-    if (description) return description;
-  }
-
-  // AskUserQuestion - show question and answer
-  if (tool === "askuserquestion") {
-    const questions = input.questions as Array<{ question?: string }> | undefined;
-    const firstQuestion = questions?.[0]?.question;
-    return firstQuestion || null;
-  }
-
-  return null;
-}
-
-// Get the answer for AskUserQuestion from tool response
-function getAskUserAnswer(toolName: string | null, metadata: Record<string, unknown> | null): string | null {
-  if (!toolName || toolName.toLowerCase() !== "askuserquestion" || !metadata) return null;
-
-  const response = metadata.response as Record<string, unknown> | string | undefined;
-
-  // Response might be a string directly or an object with answers
-  if (typeof response === "string") {
-    // Try to parse it if it looks like JSON
-    try {
-      const parsed = JSON.parse(response);
-      if (parsed.answers) {
-        const answers = Object.values(parsed.answers);
-        if (answers.length > 0) return String(answers[0]);
-      }
-    } catch {
-      return response;
-    }
-  }
-
-  if (typeof response === "object" && response) {
-    // Check for answers property
-    const answers = (response as Record<string, unknown>).answers as Record<string, string> | undefined;
-    if (answers) {
-      const answerValues = Object.values(answers);
-      if (answerValues.length > 0) return answerValues[0];
-    }
-  }
-
-  return null;
-}
-
-// Get permission request details
-function getPermissionRequestInfo(eventType: string, toolName: string | null, metadata: Record<string, unknown> | null): { tool: string; action?: string } | null {
-  if (eventType !== "permission_request") return null;
-
-  // toolName from the event indicates which tool needs permission
-  // metadata might have additional info
-  const tool = toolName || (metadata?.tool_name as string) || "Unknown";
-  const input = metadata?.input as Record<string, unknown> | undefined;
-
-  // Try to get a meaningful action description
-  let action: string | undefined;
-  if (input) {
-    if (input.command) action = String(input.command).split("\n")[0];
-    else if (input.file_path) action = String(input.file_path).split(/[/\\]/).pop();
-  }
-
-  return { tool, action };
 }
 
 const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "secondary"> = {

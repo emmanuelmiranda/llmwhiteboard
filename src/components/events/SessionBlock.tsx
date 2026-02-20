@@ -77,23 +77,9 @@ export function SessionBlock({
 
       {isExpanded && (
         <div className="border-t px-3 py-2 space-y-2 bg-muted/20">
-          {events.map((event) => (
-            <EventItem
-              key={event.id}
-              event={event}
-              isGlowing={glowingEventIds.has(event.id)}
-              showFullDetails={showFullDetails}
-              compact
-            />
-          ))}
-          {events.length === 0 && !stopEvent && (
-            <p className="text-sm text-muted-foreground text-center py-2">
-              No events in this session block
-            </p>
-          )}
-          {/* Show stop event at the end */}
+          {/* Show stop event at the top (most recent) */}
           {stopEvent && !isOrphanStop && (
-            <div className="flex items-start space-x-3 text-sm bg-gray-50 dark:bg-gray-900/30 -mx-1 px-2 py-2 rounded-md mt-2 border-t pt-3">
+            <div className="flex items-start space-x-3 text-sm bg-gray-50 dark:bg-gray-900/30 -mx-1 px-2 py-2 rounded-md mb-2 border-b pb-3">
               <Square className={`h-4 w-4 mt-0.5 flex-shrink-0 ${stopEvent.eventType === "session_end" ? "text-red-500" : "text-gray-500"}`} />
               <div className="flex-1 min-w-0">
                 <span className="font-medium text-gray-700 dark:text-gray-300">
@@ -109,6 +95,20 @@ export function SessionBlock({
                 {formatRelativeTime(new Date(stopEvent.createdAt))}
               </span>
             </div>
+          )}
+          {[...events].reverse().map((event) => (
+            <EventItem
+              key={event.id}
+              event={event}
+              isGlowing={glowingEventIds.has(event.id)}
+              showFullDetails={showFullDetails}
+              compact
+            />
+          ))}
+          {events.length === 0 && !stopEvent && (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              No events in this session block
+            </p>
           )}
         </div>
       )}
