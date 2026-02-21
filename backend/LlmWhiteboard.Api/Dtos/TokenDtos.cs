@@ -7,6 +7,13 @@ public class CreateTokenRequest
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = null!;
+
+    public string? TeamId { get; set; }
+}
+
+public class UpdateTokenRequest
+{
+    public string? TeamId { get; set; }
 }
 
 public class CreateTokenResponse
@@ -21,6 +28,8 @@ public class TokenDto
     public string Id { get; set; } = null!;
     public string Name { get; set; } = null!;
     public string TokenPrefix { get; set; } = null!;
+    public string? TeamId { get; set; }
+    public string? TeamName { get; set; }
     public DateTime? LastUsedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }

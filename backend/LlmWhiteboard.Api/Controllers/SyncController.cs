@@ -38,6 +38,8 @@ public class SyncController : ControllerBase
     public async Task<ActionResult<SyncResponse>> Sync([FromBody] SyncPayload payload)
     {
         var userId = GetUserId();
+        var apiTokenId = User.FindFirstValue("TokenId");
+        if (string.IsNullOrEmpty(apiTokenId)) apiTokenId = null;
 
         // Ensure machine exists
         var machine = await _machineService.GetOrCreateMachineAsync(userId, payload.MachineId);
@@ -49,7 +51,8 @@ public class SyncController : ControllerBase
             machine.Id,
             payload.LocalSessionId,
             payload.ProjectPath,
-            payload.CliType);
+            payload.CliType,
+            apiTokenId);
 
         // Check if this is a newly created session (created within last 5 seconds)
         var isNewSession = session.CreatedAt >= sessionCreatedBefore.AddSeconds(-5);
@@ -208,6 +211,8 @@ public class SyncController : ControllerBase
     public async Task<ActionResult<TranscriptUploadResponse>> UploadTranscript([FromBody] TranscriptUploadRequest request)
     {
         var userId = GetUserId();
+        var apiTokenId = User.FindFirstValue("TokenId");
+        if (string.IsNullOrEmpty(apiTokenId)) apiTokenId = null;
 
         // Get machine
         var machine = await _machineService.GetOrCreateMachineAsync(userId, request.MachineId);
@@ -218,7 +223,8 @@ public class SyncController : ControllerBase
             machine.Id,
             request.LocalSessionId,
             "", // Project path should already exist
-            request.CliType);
+            request.CliType,
+            apiTokenId);
 
         // Decode content
         var content = Convert.FromBase64String(request.Content);

@@ -5,7 +5,7 @@ namespace LlmWhiteboard.Api.Services;
 
 public interface ISessionService
 {
-    Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath, string? cliType = null);
+    Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath, string? cliType = null, string? apiTokenId = null);
     Task<Session?> GetSessionAsync(string sessionId, string userId);
     Task<(List<Session> Sessions, int Total, Dictionary<string, int> EventCounts, Dictionary<string, LastEventInfo> LastEvents)> ListSessionsAsync(string userId, SessionListQuery query);
     Task<Session> UpdateSessionAsync(string sessionId, string userId, SessionUpdateDto update);

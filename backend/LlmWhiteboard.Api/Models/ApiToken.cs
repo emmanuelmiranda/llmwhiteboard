@@ -25,6 +25,9 @@ public class ApiToken
 
     public DateTime? RevokedAt { get; set; }
 
+    public string? TeamId { get; set; }
+
     // Navigation properties
     public User User { get; set; } = null!;
+    public Team? Team { get; set; }
 }

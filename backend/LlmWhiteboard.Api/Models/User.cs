@@ -29,4 +29,5 @@ public class User
     public ICollection<Machine> Machines { get; set; } = new List<Machine>();
     public ICollection<OAuthAccount> OAuthAccounts { get; set; } = new List<OAuthAccount>();
     public ICollection<ShareToken> ShareTokens { get; set; } = new List<ShareToken>();
+    public ICollection<TeamMember> TeamMembers { get; set; } = new List<TeamMember>();
 }

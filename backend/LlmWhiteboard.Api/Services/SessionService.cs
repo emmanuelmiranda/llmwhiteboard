@@ -15,7 +15,7 @@ public class SessionService : ISessionService
         _db = db;
     }
 
-    public async Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath, string? cliType = null)
+    public async Task<Session> GetOrCreateSessionAsync(string userId, string machineId, string localSessionId, string projectPath, string? cliType = null, string? apiTokenId = null)
     {
         var session = await _db.Sessions
             .FirstOrDefaultAsync(s =>
@@ -27,6 +27,11 @@ public class SessionService : ISessionService
         {
             session.LastActivityAt = DateTime.UtcNow;
             session.UpdatedAt = DateTime.UtcNow;
+            // Set ApiTokenId if not yet set
+            if (session.ApiTokenId == null && apiTokenId != null)
+            {
+                session.ApiTokenId = apiTokenId;
+            }
             // Update cliType if provided and not already set (in case of migration from old client)
             if (!string.IsNullOrEmpty(cliType) && session.CliType == "claude-code" && cliType != "claude-code")
             {
@@ -43,7 +48,8 @@ public class SessionService : ISessionService
             LocalSessionId = localSessionId,
             ProjectPath = projectPath,
             Status = SessionStatus.Active,
-            CliType = cliType ?? "claude-code"
+            CliType = cliType ?? "claude-code",
+            ApiTokenId = apiTokenId
         };
 
         _db.Sessions.Add(session);

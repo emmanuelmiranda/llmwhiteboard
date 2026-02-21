@@ -56,6 +56,7 @@ builder.Services.AddScoped<IShareTokenService, ShareTokenService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddScoped<ISessionNotificationService, SessionNotificationService>();
+builder.Services.AddScoped<ITeamService, TeamService>();
 
 // GitHub OAuth
 builder.Services.AddHttpClient("GitHub");

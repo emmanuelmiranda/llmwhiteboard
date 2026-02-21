@@ -18,6 +18,8 @@ public class AppDbContext : DbContext
     public DbSet<TranscriptSnapshot> TranscriptSnapshots => Set<TranscriptSnapshot>();
     public DbSet<OAuthAccount> OAuthAccounts => Set<OAuthAccount>();
     public DbSet<ShareToken> ShareTokens => Set<ShareToken>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +53,13 @@ public class AppDbContext : DbContext
                 .WithMany(u => u.ApiTokens)
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.TeamId);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Machine
@@ -81,6 +90,13 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.Machine)
                 .WithMany(m => m.Sessions)
                 .HasForeignKey(e => e.MachineId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.ApiTokenId);
+
+            entity.HasOne(e => e.ApiToken)
+                .WithMany()
+                .HasForeignKey(e => e.ApiTokenId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.Property(e => e.Status)
@@ -149,6 +165,36 @@ public class AppDbContext : DbContext
 
             entity.Property(e => e.Visibility)
                 .HasConversion<string>();
+        });
+
+        // Team
+        modelBuilder.Entity<Team>(entity =>
+        {
+            entity.HasIndex(e => e.JoinCode).IsUnique();
+            entity.HasIndex(e => e.OwnerId);
+
+            entity.HasOne(e => e.Owner)
+                .WithMany()
+                .HasForeignKey(e => e.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TeamMember
+        modelBuilder.Entity<TeamMember>(entity =>
+        {
+            entity.HasIndex(e => new { e.TeamId, e.UserId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.TeamId);
+
+            entity.HasOne(e => e.Team)
+                .WithMany(t => t.Members)
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.TeamMembers)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

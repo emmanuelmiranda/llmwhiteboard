@@ -49,6 +49,13 @@ public class Session
     /// </summary>
     public long TotalTokensUsed { get; set; } = 0;
 
+    /// <summary>
+    /// When true, this session is hidden from all team views
+    /// </summary>
+    public bool IsPrivate { get; set; } = false;
+
+    public string? ApiTokenId { get; set; }
+
     public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -58,6 +65,7 @@ public class Session
     // Navigation properties
     public User User { get; set; } = null!;
     public Machine? Machine { get; set; }
+    public ApiToken? ApiToken { get; set; }
     public ICollection<SessionEvent> Events { get; set; } = new List<SessionEvent>();
     public SessionTranscript? Transcript { get; set; }
     public ICollection<TranscriptSnapshot> Snapshots { get; set; } = new List<TranscriptSnapshot>();

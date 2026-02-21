@@ -11,17 +11,28 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Copy, Plus, Trash2, Key } from "lucide-react";
+import { Copy, Plus, Trash2, Key, Pencil, Users } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
-import { apiClient, type ApiToken } from "@/lib/api-client";
+import { apiClient, type ApiToken, type Team } from "@/lib/api-client";
 
 export default function TokensPage() {
   const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [newTokenName, setNewTokenName] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("none");
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [editingTokenId, setEditingTokenId] = useState<string | null>(null);
+  const [editTeamId, setEditTeamId] = useState<string>("none");
   const { toast } = useToast();
 
   const fetchTokens = async () => {
@@ -39,8 +50,18 @@ export default function TokensPage() {
     }
   };
 
+  const fetchTeams = async () => {
+    try {
+      const data = await apiClient.getTeams();
+      setTeams(data.teams || []);
+    } catch {
+      // silently fail - teams dropdown will just be empty
+    }
+  };
+
   useEffect(() => {
     fetchTokens();
+    fetchTeams();
   }, []);
 
   const handleCreateToken = async (e: React.FormEvent) => {
@@ -49,9 +70,11 @@ export default function TokensPage() {
 
     setIsCreating(true);
     try {
-      const data = await apiClient.createToken(newTokenName);
+      const teamId = selectedTeamId === "none" ? undefined : selectedTeamId;
+      const data = await apiClient.createToken(newTokenName, teamId);
       setNewToken(data.token);
       setNewTokenName("");
+      setSelectedTeamId("none");
       fetchTokens();
 
       toast({
@@ -86,6 +109,30 @@ export default function TokensPage() {
     }
   };
 
+  const handleUpdateTeam = async (tokenId: string) => {
+    try {
+      const teamId = editTeamId === "none" ? null : editTeamId;
+      const updated = await apiClient.updateTokenTeam(tokenId, teamId);
+      setTokens(tokens.map((t) => (t.id === tokenId ? updated : t)));
+      setEditingTokenId(null);
+      toast({
+        title: "Token updated",
+        description: teamId ? "Token assigned to team" : "Token unassigned from team",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update token",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const startEditing = (token: ApiToken) => {
+    setEditingTokenId(token.id);
+    setEditTeamId(token.teamId || "none");
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({
@@ -107,7 +154,8 @@ export default function TokensPage() {
         <CardHeader>
           <CardTitle>Create New Token</CardTitle>
           <CardDescription>
-            Generate a new API token to sync sessions from a machine
+            Generate a new API token to sync sessions from a machine.
+            {teams.length > 0 && " Assign it to a team to scope sessions to that team's dashboard."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -135,23 +183,45 @@ export default function TokensPage() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleCreateToken} className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1">
-                <Label htmlFor="tokenName" className="sr-only">
-                  Token name
-                </Label>
-                <Input
-                  id="tokenName"
-                  placeholder="Token name (e.g., MacBook Pro)"
-                  value={newTokenName}
-                  onChange={(e) => setNewTokenName(e.target.value)}
-                  disabled={isCreating}
-                />
+            <form onSubmit={handleCreateToken} className="flex flex-col gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="tokenName" className="sr-only">
+                    Token name
+                  </Label>
+                  <Input
+                    id="tokenName"
+                    placeholder="Token name (e.g., MacBook Pro)"
+                    value={newTokenName}
+                    onChange={(e) => setNewTokenName(e.target.value)}
+                    disabled={isCreating}
+                  />
+                </div>
+                {teams.length > 0 && (
+                  <div className="sm:w-48">
+                    <Label htmlFor="tokenTeam" className="sr-only">
+                      Team (optional)
+                    </Label>
+                    <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                      <SelectTrigger id="tokenTeam">
+                        <SelectValue placeholder="No team" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No team</SelectItem>
+                        {teams.map((team) => (
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <Button type="submit" disabled={isCreating || !newTokenName.trim()} className="whitespace-nowrap">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Token
+                </Button>
               </div>
-              <Button type="submit" disabled={isCreating || !newTokenName.trim()} className="whitespace-nowrap">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Token
-              </Button>
             </form>
           )}
         </CardContent>
@@ -182,8 +252,21 @@ export default function TokensPage() {
                   key={token.id}
                   className="flex items-start justify-between gap-2 p-4 border rounded-lg"
                 >
-                  <div className="space-y-1 min-w-0">
-                    <p className="font-medium truncate">{token.name}</p>
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium truncate">{token.name}</p>
+                      {token.teamName && (
+                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                          <Users className="h-3 w-3 mr-1" />
+                          {token.teamName}
+                        </span>
+                      )}
+                      {!token.teamId && teams.length > 0 && (
+                        <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                          No team
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                       <code>{token.tokenPrefix}...</code>
                       <span className="whitespace-nowrap">
@@ -195,15 +278,50 @@ export default function TokensPage() {
                         </span>
                       )}
                     </div>
+                    {editingTokenId === token.id && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Select value={editTeamId} onValueChange={setEditTeamId}>
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="No team" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No team</SelectItem>
+                            {teams.map((team) => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button size="sm" onClick={() => handleUpdateTeam(token.id)}>
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingTokenId(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive flex-shrink-0"
-                    onClick={() => handleRevokeToken(token.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {teams.length > 0 && editingTokenId !== token.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => startEditing(token)}
+                        title="Change team assignment"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => handleRevokeToken(token.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -247,6 +365,7 @@ export default function TokensPage() {
             <p className="font-medium">3. Start using Claude Code</p>
             <p className="text-sm text-muted-foreground">
               Your sessions will automatically appear in the dashboard.
+              {teams.length > 0 && " If you assigned the token to a team, sessions will show up in that team's dashboard."}
             </p>
           </div>
         </CardContent>

@@ -1,7 +1,9 @@
+using LlmWhiteboard.Api.Data;
 using LlmWhiteboard.Api.Dtos;
 using LlmWhiteboard.Api.Hubs;
 using LlmWhiteboard.Api.Models;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace LlmWhiteboard.Api.Services;
 
@@ -9,13 +11,16 @@ public class SessionNotificationService : ISessionNotificationService
 {
     private readonly IHubContext<SessionHub> _hubContext;
     private readonly IHubContext<PublicSessionHub> _publicHubContext;
+    private readonly AppDbContext _db;
 
     public SessionNotificationService(
         IHubContext<SessionHub> hubContext,
-        IHubContext<PublicSessionHub> publicHubContext)
+        IHubContext<PublicSessionHub> publicHubContext,
+        AppDbContext db)
     {
         _hubContext = hubContext;
         _publicHubContext = publicHubContext;
+        _db = db;
     }
 
     public async Task NotifySessionCreatedAsync(string userId, SessionDto session)
@@ -23,12 +28,19 @@ public class SessionNotificationService : ISessionNotificationService
         // Notify user group
         await _hubContext.Clients.Group($"user:{userId}")
             .SendAsync("SessionCreated", session);
+
+        // Notify team groups (new sessions default to non-private, but check anyway)
+        var dbSession = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == session.Id);
+        if (dbSession != null && !dbSession.IsPrivate)
+        {
+            await NotifyTeamGroupsAsync(userId, "TeamSessionCreated", session);
+        }
     }
 
     public async Task NotifySessionUpdatedAsync(string userId, string sessionId, SessionDto session)
     {
         // Notify user group and session group
-        var tasks = new[]
+        var tasks = new List<Task>
         {
             _hubContext.Clients.Group($"user:{userId}")
                 .SendAsync("SessionUpdated", session),
@@ -36,13 +48,20 @@ public class SessionNotificationService : ISessionNotificationService
                 .SendAsync("SessionUpdated", session)
         };
 
+        // Check if the session is private before notifying team groups
+        var dbSession = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+        if (dbSession != null && !dbSession.IsPrivate)
+        {
+            tasks.Add(NotifyTeamGroupsAsync(userId, "TeamSessionUpdated", session));
+        }
+
         await Task.WhenAll(tasks);
     }
 
     public async Task NotifySessionDeletedAsync(string userId, string sessionId)
     {
         // Notify user group and session group
-        var tasks = new[]
+        var tasks = new List<Task>
         {
             _hubContext.Clients.Group($"user:{userId}")
                 .SendAsync("SessionDeleted", sessionId),
@@ -50,19 +69,29 @@ public class SessionNotificationService : ISessionNotificationService
                 .SendAsync("SessionDeleted", sessionId)
         };
 
+        // Notify team groups about deletion (always notify so team views can remove the session)
+        tasks.Add(NotifyTeamGroupsAsync(userId, "TeamSessionDeleted", sessionId));
+
         await Task.WhenAll(tasks);
     }
 
     public async Task NotifyNewEventAsync(string userId, string sessionId, SessionEventDto eventDto)
     {
         // Notify user group and session group
-        var tasks = new[]
+        var tasks = new List<Task>
         {
             _hubContext.Clients.Group($"user:{userId}")
                 .SendAsync("NewEvent", eventDto),
             _hubContext.Clients.Group($"session:{sessionId}")
                 .SendAsync("NewEvent", eventDto)
         };
+
+        // Check if the session is private before notifying team groups
+        var session = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+        if (session != null && !session.IsPrivate)
+        {
+            tasks.Add(NotifyTeamGroupsAsync(userId, "TeamNewEvent", eventDto));
+        }
 
         await Task.WhenAll(tasks);
     }
@@ -130,6 +159,28 @@ public class SessionNotificationService : ISessionNotificationService
             _publicHubContext.Clients.Group($"public:session:{sessionId}")
                 .SendAsync("PublicNewEvent", activityOnlyDto)
         };
+
+        await Task.WhenAll(tasks);
+    }
+
+    /// <summary>
+    /// Send a notification to all team groups that contain the given user.
+    /// </summary>
+    private async Task NotifyTeamGroupsAsync(string userId, string method, object data)
+    {
+        var teamIds = await _db.TeamMembers
+            .Where(tm => tm.UserId == userId)
+            .Select(tm => tm.TeamId)
+            .ToListAsync();
+
+        if (teamIds.Count == 0)
+        {
+            return;
+        }
+
+        var tasks = teamIds.Select(teamId =>
+            _hubContext.Clients.Group($"team:{teamId}")
+                .SendAsync(method, data));
 
         await Task.WhenAll(tasks);
     }

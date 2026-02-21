@@ -35,6 +35,8 @@ public class TokensController : ControllerBase
                 Id = t.Id,
                 Name = t.Name,
                 TokenPrefix = t.TokenPrefix,
+                TeamId = t.TeamId,
+                TeamName = t.Team?.Name,
                 LastUsedAt = t.LastUsedAt,
                 CreatedAt = t.CreatedAt
             }).ToList()
@@ -45,14 +47,50 @@ public class TokensController : ControllerBase
     public async Task<ActionResult<CreateTokenResponse>> CreateToken([FromBody] CreateTokenRequest request)
     {
         var userId = GetUserId();
-        var (token, apiToken) = await _tokenService.CreateTokenAsync(userId, request.Name);
 
-        return Ok(new CreateTokenResponse
+        try
         {
-            Token = token,
-            Id = apiToken.Id,
-            Message = "Token created. Save it now - you won't be able to see it again!"
-        });
+            var (token, apiToken) = await _tokenService.CreateTokenAsync(userId, request.Name, request.TeamId);
+
+            return Ok(new CreateTokenResponse
+            {
+                Token = token,
+                Id = apiToken.Id,
+                Message = "Token created. Save it now - you won't be able to see it again!"
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+    }
+
+    [HttpPatch("{id}")]
+    public async Task<ActionResult<TokenDto>> UpdateTokenTeam(string id, [FromBody] UpdateTokenRequest request)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            var token = await _tokenService.UpdateTokenTeamAsync(id, userId, request.TeamId);
+            if (token == null)
+                return NotFound(new { error = "Token not found" });
+
+            return Ok(new TokenDto
+            {
+                Id = token.Id,
+                Name = token.Name,
+                TokenPrefix = token.TokenPrefix,
+                TeamId = token.TeamId,
+                TeamName = token.Team?.Name,
+                LastUsedAt = token.LastUsedAt,
+                CreatedAt = token.CreatedAt
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
     }
 
     [HttpDelete]

@@ -15,8 +15,16 @@ public class TokenService : ITokenService
         _db = db;
     }
 
-    public async Task<(string Token, ApiToken ApiToken)> CreateTokenAsync(string userId, string name)
+    public async Task<(string Token, ApiToken ApiToken)> CreateTokenAsync(string userId, string name, string? teamId = null)
     {
+        if (teamId != null)
+        {
+            var isMember = await _db.TeamMembers
+                .AnyAsync(tm => tm.TeamId == teamId && tm.UserId == userId);
+            if (!isMember)
+                throw new UnauthorizedAccessException("You must be a member of the team to assign a token to it.");
+        }
+
         var randomBytes = RandomNumberGenerator.GetBytes(32);
         var token = $"{TokenPrefix}{Convert.ToHexString(randomBytes).ToLower()}";
         var prefix = token[..12];
@@ -27,7 +35,8 @@ public class TokenService : ITokenService
             UserId = userId,
             Name = name,
             TokenHash = tokenHash,
-            TokenPrefix = prefix
+            TokenPrefix = prefix,
+            TeamId = teamId
         };
 
         _db.ApiTokens.Add(apiToken);
@@ -64,9 +73,38 @@ public class TokenService : ITokenService
     public async Task<List<ApiToken>> GetUserTokensAsync(string userId)
     {
         return await _db.ApiTokens
+            .Include(t => t.Team)
             .Where(t => t.UserId == userId && t.RevokedAt == null)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<ApiToken?> UpdateTokenTeamAsync(string tokenId, string userId, string? teamId)
+    {
+        var token = await _db.ApiTokens
+            .Include(t => t.Team)
+            .FirstOrDefaultAsync(t => t.Id == tokenId && t.UserId == userId && t.RevokedAt == null);
+
+        if (token == null) return null;
+
+        if (teamId != null)
+        {
+            var isMember = await _db.TeamMembers
+                .AnyAsync(tm => tm.TeamId == teamId && tm.UserId == userId);
+            if (!isMember)
+                throw new UnauthorizedAccessException("You must be a member of the team to assign a token to it.");
+        }
+
+        token.TeamId = teamId;
+        await _db.SaveChangesAsync();
+
+        // Reload team navigation property
+        if (teamId != null)
+        {
+            await _db.Entry(token).Reference(t => t.Team).LoadAsync();
+        }
+
+        return token;
     }
 
     public async Task<bool> RevokeTokenAsync(string tokenId, string userId)

@@ -177,14 +177,21 @@ class ApiClient {
     return this.request<{ tokens: ApiToken[] }>("/api/tokens");
   }
 
-  async createToken(name: string) {
+  async createToken(name: string, teamId?: string) {
     return this.request<{ token: string; id: string; message: string }>(
       "/api/tokens",
       {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, teamId: teamId || null }),
       }
     );
+  }
+
+  async updateTokenTeam(tokenId: string, teamId: string | null) {
+    return this.request<ApiToken>(`/api/tokens/${tokenId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ teamId }),
+    });
   }
 
   async revokeToken(id: string) {
@@ -237,6 +244,89 @@ class ApiClient {
   async revokeShare(id: string) {
     return this.request<{ success: boolean }>(`/api/share/${id}`, {
       method: "DELETE",
+    });
+  }
+
+  // Teams
+  async createTeam(data: { name: string; description?: string }) {
+    return this.request<CreateTeamResponse>("/api/teams", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTeams() {
+    return this.request<TeamListResponse>("/api/teams");
+  }
+
+  async getTeamDetail(id: string) {
+    return this.request<TeamDetail>(`/api/teams/${id}`);
+  }
+
+  async updateTeam(id: string, data: { name?: string; description?: string }) {
+    return this.request<Team>(`/api/teams/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTeam(id: string) {
+    return this.request<{ success: boolean }>(`/api/teams/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async joinTeam(joinCode: string) {
+    return this.request<{ success: boolean; teamId: string }>("/api/teams/join", {
+      method: "POST",
+      body: JSON.stringify({ joinCode }),
+    });
+  }
+
+  async leaveTeam(id: string) {
+    return this.request<{ success: boolean }>(`/api/teams/${id}/leave`, {
+      method: "POST",
+    });
+  }
+
+  async removeMember(teamId: string, userId: string) {
+    return this.request<{ success: boolean }>(`/api/teams/${teamId}/members/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async regenerateJoinCode(teamId: string) {
+    return this.request<{ joinCode: string }>(`/api/teams/${teamId}/regenerate-code`, {
+      method: "POST",
+    });
+  }
+
+  async getTeamSessions(teamId: string, params?: { memberId?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.memberId) searchParams.set("memberId", params.memberId);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+
+    return this.request<TeamSessionListResponse>(
+      `/api/teams/${teamId}/sessions?${searchParams.toString()}`
+    );
+  }
+
+  async getTeamActivity(teamId: string, params?: { memberId?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.memberId) searchParams.set("memberId", params.memberId);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+
+    return this.request<TeamActivityResponse>(
+      `/api/teams/${teamId}/activity?${searchParams.toString()}`
+    );
+  }
+
+  async setSessionPrivacy(sessionId: string, isPrivate: boolean) {
+    return this.request<{ success: boolean; isPrivate: boolean }>(`/api/sessions/${sessionId}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
     });
   }
 
@@ -379,6 +469,8 @@ interface ApiToken {
   id: string;
   name: string;
   tokenPrefix: string;
+  teamId: string | null;
+  teamName: string | null;
   lastUsedAt: string | null;
   createdAt: string;
 }
@@ -479,6 +571,96 @@ interface PublicEvent {
   metadata?: Record<string, unknown>;
 }
 
+// Team types
+interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerName: string;
+  memberCount: number;
+  joinCode: string | null;
+  createdAt: string;
+}
+
+interface TeamDetail extends Team {
+  members: TeamMember[];
+}
+
+interface TeamMember {
+  id: string;
+  userId: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  role: string;
+  joinedAt: string;
+}
+
+interface TeamSession {
+  id: string;
+  localSessionId: string;
+  projectPath: string;
+  title: string | null;
+  description: string | null;
+  status: SessionStatus;
+  tags: string[];
+  cliType: string;
+  machine: {
+    id: string;
+    machineId: string;
+    name: string | null;
+  } | null;
+  hasTranscript: boolean;
+  isEncrypted: boolean;
+  transcriptSizeBytes: number;
+  eventCount: number;
+  compactionCount: number;
+  totalTokensUsed: number;
+  lastActivityAt: string;
+  createdAt: string;
+  lastEventType: string | null;
+  lastEventToolName: string | null;
+  lastEventAt: string | null;
+  memberName: string;
+  memberImage: string | null;
+}
+
+interface CreateTeamResponse {
+  id: string;
+  name: string;
+  joinCode: string;
+}
+
+interface TeamListResponse {
+  teams: Team[];
+}
+
+interface TeamSessionListResponse {
+  sessions: TeamSession[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+interface TeamActivityEvent {
+  id: string;
+  sessionId: string;
+  sessionTitle: string | null;
+  eventType: string;
+  toolName: string | null;
+  summary: string | null;
+  createdAt: string;
+  memberName: string;
+  memberImage: string | null;
+}
+
+interface TeamActivityResponse {
+  events: TeamActivityEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 interface PublicSessionListResponse {
   sessions: PublicSession[];
   total: number;
@@ -514,4 +696,13 @@ export type {
   PublicEvent,
   PublicSessionListResponse,
   PublicEventsResponse,
+  Team,
+  TeamDetail,
+  TeamMember,
+  TeamSession,
+  CreateTeamResponse,
+  TeamListResponse,
+  TeamSessionListResponse,
+  TeamActivityEvent,
+  TeamActivityResponse,
 };
