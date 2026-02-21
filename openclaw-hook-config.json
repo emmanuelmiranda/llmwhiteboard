@@ -1,0 +1,12 @@
+{
+  "name": "llmwhiteboard-sync",
+  "version": "1.0.0",
+  "description": "Sync OpenClaw events to LLM Whiteboard dashboard",
+  "export": "default",
+  "events": [
+    "agent",
+    "session",
+    "gateway",
+    "command"
+  ]
+}

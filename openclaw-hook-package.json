@@ -1,0 +1,11 @@
+{
+  "name": "llmwhiteboard-sync",
+  "version": "1.0.0",
+  "description": "Sync OpenClaw events to LLM Whiteboard dashboard",
+  "type": "module",
+  "main": "hook.ts",
+  "dependencies": {},
+  "peerDependencies": {
+    "node-fetch": "*"
+  }
+}
