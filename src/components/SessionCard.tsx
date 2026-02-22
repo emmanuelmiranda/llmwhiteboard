@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatRelativeTime, truncate } from "@/lib/utils";
+import { formatBytes, type ActivityState } from "@/lib/session-utils";
 import { Folder, Activity, Clock, Monitor, Lock, RefreshCw, Sparkles, Bot, FileText, Loader2, MessageSquareMore } from "lucide-react";
 import type { SessionStatus } from "@/types";
 
-export type SessionActivityState = "idle" | "working" | "waiting";
+export type { ActivityState as SessionActivityState };
 
 interface SessionCardProps {
   session: {
@@ -33,7 +35,9 @@ interface SessionCardProps {
     lastActivityAt: string;
     createdAt: string;
   };
-  activityState?: SessionActivityState;
+  activityState?: ActivityState;
+  memberName?: string;
+  memberImage?: string | null;
 }
 
 const statusColors: Record<SessionStatus, string> = {
@@ -42,13 +46,6 @@ const statusColors: Record<SessionStatus, string> = {
   Completed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   Archived: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
 };
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 const cliConfig: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
   "claude-code": {
@@ -63,7 +60,7 @@ const cliConfig: Record<string, { label: string; icon: typeof Sparkles; classNam
   },
 };
 
-const activityConfig: Record<SessionActivityState, { label: string; icon: typeof Loader2; className: string; animate?: boolean }> = {
+const activityConfig: Record<ActivityState, { label: string; icon: typeof Loader2; className: string; animate?: boolean }> = {
   working: {
     label: "Working",
     icon: Loader2,
@@ -82,7 +79,7 @@ const activityConfig: Record<SessionActivityState, { label: string; icon: typeof
   },
 };
 
-export function SessionCard({ session, activityState }: SessionCardProps) {
+export function SessionCard({ session, activityState, memberName, memberImage }: SessionCardProps) {
   const projectName = session.projectPath.split(/[/\\]/).pop() || session.projectPath;
   const cliInfo = cliConfig[session.cliType] || {
     label: session.cliType,
@@ -98,9 +95,22 @@ export function SessionCard({ session, activityState }: SessionCardProps) {
 
   return (
     <Link href={`/sessions/${session.id}`}>
-      <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+      <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
         <CardHeader className="pb-2">
           <div className="space-y-2">
+            {/* Member info (team context) */}
+            {memberName && (
+              <div className="flex items-center gap-2">
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={memberImage || undefined} />
+                  <AvatarFallback className="text-[10px]">
+                    {memberName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-xs text-muted-foreground">{memberName}</span>
+              </div>
+            )}
+
             {/* Title */}
             <h3 className="font-semibold leading-tight break-words">
               {session.title || `Session ${session.localSessionId.slice(0, 8)}`}

@@ -649,6 +649,7 @@ interface TeamActivityEvent {
   eventType: string;
   toolName: string | null;
   summary: string | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
   memberName: string;
   memberImage: string | null;

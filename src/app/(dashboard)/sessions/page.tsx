@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,66 +11,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SessionCard, type SessionActivityState } from "@/components/SessionCard";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SessionCard } from "@/components/SessionCard";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, LayoutGrid, List, Inbox, Sparkles, Bot, Loader2, MessageSquareMore, Clock, Pause, CheckCircle, Archive, ArrowUpDown, ArrowDown, ArrowUp } from "lucide-react";
-import { apiClient, type Session } from "@/lib/api-client";
-
-// Compute activity state from session's last event data
-// This is used for initial render before SignalR context is updated
-function computeActivityStateFromSession(session: Session): "working" | "waiting" | "idle" {
-  if (session.status !== "Active") return "idle";
-
-  const eventType = session.lastEventType?.toLowerCase();
-  const toolName = session.lastEventToolName;
-  const eventTime = session.lastEventAt ? new Date(session.lastEventAt).getTime() : null;
-
-  if (!eventType || !eventTime) return "idle";
-
-  // Time thresholds
-  const IDLE_THRESHOLD_DEFAULT = 5 * 60 * 1000; // 5 minutes
-  const IDLE_THRESHOLD_USER_PROMPT = 60 * 1000; // 1 minute for user_prompt
-
-  const threshold = eventType === "user_prompt" ? IDLE_THRESHOLD_USER_PROMPT : IDLE_THRESHOLD_DEFAULT;
-  const timeSinceEvent = Date.now() - eventTime;
-
-  // Check if too old
-  if (timeSinceEvent > threshold) return "idle";
-
-  // Session stopped or ended = idle
-  if (eventType === "stop" || eventType === "session_end" || eventType === "agent_stop") {
-    return "idle";
-  }
-
-  // Permission request = waiting
-  if (eventType === "permission_request") {
-    return "waiting";
-  }
-
-  // AskUserQuestion tool_use_start = waiting (question asked, waiting for answer)
-  // tool_use = answer received, so that's "working"
-  if (eventType === "tool_use_start" && toolName?.toLowerCase() === "askuserquestion") {
-    return "waiting";
-  }
-
-  // Everything else = working
-  return "working";
-}
+import { computeActivityState } from "@/lib/session-utils";
+import {
+  Search, LayoutGrid, List, Inbox, Sparkles, Bot, Loader2, MessageSquareMore,
+  Clock, Pause, CheckCircle, Archive, ArrowUpDown, ArrowDown, ArrowUp, Users,
+} from "lucide-react";
+import { apiClient, type Session, type Team, type TeamSession, type TeamDetail } from "@/lib/api-client";
 import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ActivityStats } from "@/components/activity-stats";
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const teamParam = searchParams.get("team");
+
+  const [sessions, setSessions] = useState<(Session | TeamSession)[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  // Unified state filter: working/waiting/idle (hook-driven) + paused/completed/archived (manual)
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [cliFilter, setCliFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("lastActive");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [glowingIds, setGlowingIds] = useState<Set<string>>(new Set());
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("all");
   const { toast } = useToast();
   const {
     onSessionCreated,
@@ -81,7 +52,34 @@ export default function SessionsPage() {
     updateSessionActivityState,
   } = useSignalRContext();
 
-  // Add glow effect to an item temporarily
+  const isTeamMode = !!teamParam;
+
+  // Fetch teams for context switcher
+  useEffect(() => {
+    apiClient.getTeams().then((data) => setTeams(data.teams || [])).catch(() => {});
+  }, []);
+
+  // Fetch team detail when in team mode (for member list)
+  useEffect(() => {
+    if (teamParam) {
+      apiClient.getTeamDetail(teamParam).then(setTeamDetail).catch(() => setTeamDetail(null));
+    } else {
+      setTeamDetail(null);
+    }
+  }, [teamParam]);
+
+  const setTeamContext = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "personal") {
+      params.delete("team");
+    } else {
+      params.set("team", value);
+    }
+    setSelectedMemberId("all");
+    router.push(`/sessions?${params.toString()}`);
+  };
+
+  // Add glow effect temporarily
   const addGlow = useCallback((id: string) => {
     setGlowingIds((prev) => new Set(prev).add(id));
     setTimeout(() => {
@@ -96,28 +94,32 @@ export default function SessionsPage() {
   const fetchSessions = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Map state filter to API status filter
-      // working/waiting/idle = Active sessions (filtered client-side)
-      // paused/completed/archived = direct database status
-      let apiStatus: string | undefined;
-      if (stateFilter === "paused") apiStatus = "Paused";
-      else if (stateFilter === "completed") apiStatus = "Completed";
-      else if (stateFilter === "archived") apiStatus = "Archived";
-      else if (stateFilter === "working" || stateFilter === "waiting" || stateFilter === "idle") apiStatus = "Active";
-      // "all" = undefined (fetch all)
+      if (teamParam) {
+        // Team mode
+        const memberId = selectedMemberId === "all" ? undefined : selectedMemberId;
+        const data = await apiClient.getTeamSessions(teamParam, { memberId });
+        setSessions(data.sessions || []);
+      } else {
+        // Personal mode
+        let apiStatus: string | undefined;
+        if (stateFilter === "paused") apiStatus = "Paused";
+        else if (stateFilter === "completed") apiStatus = "Completed";
+        else if (stateFilter === "archived") apiStatus = "Archived";
+        else if (stateFilter === "working" || stateFilter === "waiting" || stateFilter === "idle") apiStatus = "Active";
 
-      const data = await apiClient.getSessions({
-        search: search || undefined,
-        status: apiStatus,
-        cliType: cliFilter !== "all" ? cliFilter : undefined,
-      });
-      setSessions(data.sessions || []);
+        const data = await apiClient.getSessions({
+          search: search || undefined,
+          status: apiStatus,
+          cliType: cliFilter !== "all" ? cliFilter : undefined,
+        });
+        setSessions(data.sessions || []);
 
-      // Initialize activity state from API data (last event info)
-      for (const session of data.sessions || []) {
-        if (session.lastEventType && session.lastEventAt) {
-          const eventTime = new Date(session.lastEventAt).getTime();
-          updateSessionActivityState(session.id, session.lastEventType, session.lastEventToolName, eventTime);
+        // Initialize activity state from API data
+        for (const session of data.sessions || []) {
+          if (session.lastEventType && session.lastEventAt) {
+            const eventTime = new Date(session.lastEventAt).getTime();
+            updateSessionActivityState(session.id, session.lastEventType, session.lastEventToolName, eventTime);
+          }
         }
       }
     } catch (error) {
@@ -129,25 +131,22 @@ export default function SessionsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, stateFilter, cliFilter, toast, updateSessionActivityState]);
+  }, [teamParam, selectedMemberId, search, stateFilter, cliFilter, toast, updateSessionActivityState]);
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
 
-  // Subscribe to real-time session updates
+  // Subscribe to real-time session updates (personal mode only)
   useEffect(() => {
+    if (isTeamMode) return;
+
     const unsubscribeCreated = onSessionCreated((newSession) => {
-      // Add new session at the top
       setSessions((prev) => {
-        // Check if session already exists
-        if (prev.some((s) => s.id === newSession.id)) {
-          return prev;
-        }
+        if (prev.some((s) => s.id === newSession.id)) return prev;
         return [newSession, ...prev];
       });
       addGlow(newSession.id);
-      // New sessions start as "working"
       updateSessionActivityState(newSession.id, "session_start");
     });
 
@@ -163,9 +162,7 @@ export default function SessionsPage() {
     });
 
     const unsubscribeNewEvent = onNewEvent((event) => {
-      // Update activity state based on event type
       updateSessionActivityState(event.sessionId, event.eventType, event.toolName);
-      // Also update the session's last event info so computeActivityStateFromSession works
       setSessions((prev) =>
         prev.map((s) =>
           s.id === event.sessionId
@@ -186,12 +183,14 @@ export default function SessionsPage() {
       unsubscribeDeleted();
       unsubscribeNewEvent();
     };
-  }, [onSessionCreated, onSessionUpdated, onSessionDeleted, onNewEvent, addGlow, updateSessionActivityState]);
+  }, [isTeamMode, onSessionCreated, onSessionUpdated, onSessionDeleted, onNewEvent, addGlow, updateSessionActivityState]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     fetchSessions();
   };
+
+  const currentTeam = teams.find((t) => t.id === teamParam);
 
   return (
     <div className="space-y-6 overflow-x-hidden">
@@ -199,15 +198,62 @@ export default function SessionsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Sessions</h1>
           <p className="text-muted-foreground">
-            View and manage your LLM CLI sessions
+            {isTeamMode && currentTeam
+              ? `Team sessions for ${currentTeam.name}`
+              : "View and manage your LLM CLI sessions"}
           </p>
         </div>
-        <ConnectionStatus />
+        <div className="flex items-center gap-2">
+          {/* Context switcher */}
+          {teams.length > 0 && (
+            <Select value={teamParam || "personal"} onValueChange={setTeamContext}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="personal">My Sessions</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    <span className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      {team.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Member filter (team mode only) */}
+          {isTeamMode && teamDetail && teamDetail.members.length > 1 && (
+            <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All members" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                {teamDetail.members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    <span className="flex items-center gap-1.5">
+                      <Avatar className="h-4 w-4">
+                        <AvatarImage src={m.image || undefined} />
+                        <AvatarFallback className="text-[8px]">{(m.name || m.email || "?").charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      {m.name || m.email}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {!isTeamMode && <ConnectionStatus />}
+        </div>
       </div>
 
-      <div className="p-3 rounded-lg border bg-card">
-        <ActivityStats />
-      </div>
+      {!isTeamMode && (
+        <div className="p-3 rounded-lg border bg-card">
+          <ActivityStats />
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-4">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
@@ -344,10 +390,14 @@ export default function SessionsPage() {
       ) : sessions.length === 0 ? (
         <div className="text-center py-12">
           <Inbox className="h-12 w-12 mx-auto text-muted-foreground/50" />
-          <h3 className="mt-4 text-lg font-medium">No sessions yet</h3>
+          <h3 className="mt-4 text-lg font-medium">
+            {isTeamMode ? "No team sessions yet" : "No sessions yet"}
+          </h3>
           <p className="text-muted-foreground mt-2">
             {search
               ? "No sessions match your search"
+              : isTeamMode
+              ? "Team members need to use tokens scoped to this team"
               : "Run the CLI to sync your first session"}
           </p>
         </div>
@@ -360,7 +410,7 @@ export default function SessionsPage() {
           }
         >
           {sessions
-            .slice() // Create a copy to avoid mutating state
+            .slice()
             .sort((a, b) => {
               let comparison = 0;
               switch (sortBy) {
@@ -381,24 +431,20 @@ export default function SessionsPage() {
               return sortDir === "desc" ? -comparison : comparison;
             })
             .map((session) => {
-              // Compute activity state directly from session's last event data
-              // This is reliable and doesn't depend on context timing
-              const activityState: SessionActivityState = computeActivityStateFromSession(session);
-
-              // Unified state combines activity state with manual statuses (paused, completed, archived)
+              const activityState = computeActivityState(session);
               const unifiedState = session.status === "Active"
                 ? activityState
                 : session.status.toLowerCase();
               return { session, activityState, unifiedState };
             })
             .filter(({ unifiedState }) => {
-              // Filter by unified state
               if (stateFilter === "all") return true;
               return unifiedState === stateFilter;
             })
             .map(({ session, activityState }) => {
-              const shouldPulse = highlightType && activityState === highlightType;
-              const shouldHoverHighlight = hoverHighlightType && activityState === hoverHighlightType;
+              const teamSession = isTeamMode ? (session as TeamSession) : null;
+              const shouldPulse = !isTeamMode && highlightType && activityState === highlightType;
+              const shouldHoverHighlight = !isTeamMode && hoverHighlightType && activityState === hoverHighlightType;
               return (
                 <div
                   key={session.id}
@@ -409,6 +455,8 @@ export default function SessionsPage() {
                   <SessionCard
                     session={session}
                     activityState={activityState}
+                    memberName={teamSession?.memberName}
+                    memberImage={teamSession?.memberImage}
                   />
                 </div>
               );

@@ -1,90 +1,71 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
-import { Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore, Square, Wrench, MessageSquare, Play, RefreshCw, AlertCircle, ShieldAlert, Sparkles } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import {
+  computeActivityState,
+  matchesEventFilter,
+  matchesSessionFilter,
+  eventFilters,
+  sessionFilters,
+  type EventFilter,
+  type SessionFilter,
+} from "@/lib/session-utils";
+import {
+  Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore,
+  Square, Wrench, MessageSquare, Play, RefreshCw, ShieldAlert, Sparkles, Users,
+} from "lucide-react";
+import { apiClient, type Session, type Team, type TeamDetail, type TeamSession, type SessionEvent, type TeamActivityEvent } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ActivityStats } from "@/components/activity-stats";
-import { SessionPixelProgress, TimelinePixelProgress } from "@/components/pixel-progress";
+import { TimelinePixelProgress } from "@/components/pixel-progress";
 import { getToolDisplayInfo, getAskUserAnswer, getPermissionRequestInfo } from "@/components/events/event-utils";
 
+// Unified event type covering both personal and team events
+interface TimelineEvent {
+  id: string;
+  sessionId: string;
+  sessionTitle?: string | null;
+  eventType: string;
+  toolName: string | null;
+  summary: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  memberName?: string;
+  memberImage?: string | null;
+}
+
+// Unified session type covering both personal and team sessions
 interface TimelineSession {
   id: string;
   localSessionId: string;
   projectPath: string;
   title: string | null;
   status: SessionStatus;
-  machine: {
-    id: string;
-    machineId: string;
-    name: string | null;
-  } | null;
+  machine: { id: string; machineId: string; name: string | null } | null;
   lastActivityAt: string;
   createdAt: string;
   eventCount: number;
-  // Last event info for computing activity state
   lastEventType: string | null;
   lastEventToolName: string | null;
   lastEventAt: string | null;
-}
-
-type ActivityState = "idle" | "working" | "waiting";
-
-// Compute activity state from session's last event data
-function computeActivityStateFromSession(session: TimelineSession): ActivityState {
-  if (session.status !== "Active") return "idle";
-
-  const eventType = session.lastEventType?.toLowerCase();
-  const toolName = session.lastEventToolName;
-  const eventTime = session.lastEventAt ? new Date(session.lastEventAt).getTime() : null;
-
-  if (!eventType || !eventTime) return "idle";
-
-  // Time thresholds
-  const IDLE_THRESHOLD_DEFAULT = 5 * 60 * 1000; // 5 minutes
-  const IDLE_THRESHOLD_USER_PROMPT = 60 * 1000; // 1 minute for user_prompt
-
-  const threshold = eventType === "user_prompt" ? IDLE_THRESHOLD_USER_PROMPT : IDLE_THRESHOLD_DEFAULT;
-  const timeSinceEvent = Date.now() - eventTime;
-
-  // Check if too old
-  if (timeSinceEvent > threshold) return "idle";
-
-  // Session stopped or ended = idle
-  if (eventType === "stop" || eventType === "session_end" || eventType === "agent_stop") {
-    return "idle";
-  }
-
-  // Permission request = waiting
-  if (eventType === "permission_request") {
-    return "waiting";
-  }
-
-  // AskUserQuestion tool_use_start = waiting (question asked, waiting for answer)
-  // tool_use = answer received, so that's "working"
-  if (eventType === "tool_use_start" && toolName?.toLowerCase() === "askuserquestion") {
-    return "waiting";
-  }
-
-  // Everything else = working
-  return "working";
-}
-
-interface TimelineEvent {
-  id: string;
-  sessionId: string;
-  eventType: string;
-  toolName: string | null;
-  summary: string | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
+  memberName?: string;
+  memberImage?: string | null;
 }
 
 const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "secondary"> = {
@@ -94,42 +75,15 @@ const statusColors: Record<SessionStatus, "default" | "success" | "warning" | "s
   Archived: "secondary",
 };
 
-type EventFilter = "all" | "prompts" | "tools" | "waiting" | "sessions" | "compaction";
-type SessionFilter = "all" | "active" | "working" | "waiting" | "idle";
-
-const eventFilters: { value: EventFilter; label: string; icon: typeof Activity }[] = [
-  { value: "all", label: "All", icon: Activity },
-  { value: "prompts", label: "Prompts", icon: MessageSquare },
-  { value: "tools", label: "Tools", icon: Wrench },
-  { value: "waiting", label: "Waiting", icon: MessageSquareMore },
-  { value: "sessions", label: "Sessions", icon: Play },
-  { value: "compaction", label: "Compaction", icon: RefreshCw },
-];
-
-const sessionFilters: { value: SessionFilter; label: string; icon: typeof Activity }[] = [
-  { value: "all", label: "All", icon: Clock },
-  { value: "active", label: "Active", icon: Activity },
-  { value: "working", label: "Working", icon: Loader2 },
-  { value: "waiting", label: "Waiting", icon: MessageSquareMore },
-  { value: "idle", label: "Idle", icon: Square },
-];
-
-function matchesEventFilter(eventType: string, toolName: string | null, filter: EventFilter): boolean {
-  if (filter === "all") return true;
-  if (filter === "prompts") return eventType === "user_prompt";
-  if (filter === "tools") return eventType === "tool_use" || eventType === "tool_use_start";
-  if (filter === "waiting") {
-    return eventType === "permission_request" ||
-           ((eventType === "tool_use" || eventType === "tool_use_start") && toolName?.toLowerCase() === "askuserquestion");
-  }
-  if (filter === "sessions") return eventType === "session_start" || eventType === "session_end" || eventType === "stop";
-  if (filter === "compaction") return eventType === "context_compaction";
-  return true;
-}
-
 export default function TimelinePage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const teamParam = searchParams.get("team");
+
   const [sessions, setSessions] = useState<TimelineSession[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [glowingSessionIds, setGlowingSessionIds] = useState<Set<string>>(new Set());
   const [glowingEventIds, setGlowingEventIds] = useState<Set<string>>(new Set());
@@ -137,6 +91,7 @@ export default function TimelinePage() {
   const [hoveredEventSessionId, setHoveredEventSessionId] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>("all");
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("all");
   const [showPixelProgress, setShowPixelProgress] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const { toast } = useToast();
@@ -149,39 +104,66 @@ export default function TimelinePage() {
     updateSessionActivityState,
   } = useSignalRContext();
 
-  // Add glow effect to a session temporarily
+  const isTeamMode = !!teamParam;
+
+  // Fetch teams for context switcher
+  useEffect(() => {
+    apiClient.getTeams().then((data) => setTeams(data.teams || [])).catch(() => {});
+  }, []);
+
+  // Fetch team detail when in team mode
+  useEffect(() => {
+    if (teamParam) {
+      apiClient.getTeamDetail(teamParam).then(setTeamDetail).catch(() => setTeamDetail(null));
+    } else {
+      setTeamDetail(null);
+    }
+  }, [teamParam]);
+
+  const setTeamContext = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "personal") {
+      params.delete("team");
+    } else {
+      params.set("team", value);
+    }
+    setSelectedMemberId("all");
+    router.push(`/timeline?${params.toString()}`);
+  };
+
+  // Add glow effects
   const addSessionGlow = useCallback((id: string) => {
     setGlowingSessionIds((prev) => new Set(prev).add(id));
     setTimeout(() => {
-      setGlowingSessionIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      setGlowingSessionIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     }, 2000);
   }, []);
 
-  // Add glow effect to an event temporarily
   const addEventGlow = useCallback((id: string) => {
     setGlowingEventIds((prev) => new Set(prev).add(id));
     setTimeout(() => {
-      setGlowingEventIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      setGlowingEventIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     }, 2000);
   }, []);
 
   const fetchData = useCallback(async () => {
     try {
-      const [sessionsData, eventsData] = await Promise.all([
-        apiClient.getSessions({ limit: 20 }),
-        apiClient.getEvents({ limit: 2000 }),
-      ]);
-
-      setSessions(sessionsData.sessions || []);
-      setEvents(eventsData.events || []);
+      if (teamParam) {
+        const memberId = selectedMemberId === "all" ? undefined : selectedMemberId;
+        const [sessionsData, eventsData] = await Promise.all([
+          apiClient.getTeamSessions(teamParam, { memberId, limit: 20 }),
+          apiClient.getTeamActivity(teamParam, { memberId, limit: 2000 }),
+        ]);
+        setSessions(sessionsData.sessions || []);
+        setEvents(eventsData.events || []);
+      } else {
+        const [sessionsData, eventsData] = await Promise.all([
+          apiClient.getSessions({ limit: 20 }),
+          apiClient.getEvents({ limit: 2000 }),
+        ]);
+        setSessions(sessionsData.sessions || []);
+        setEvents(eventsData.events || []);
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -191,37 +173,28 @@ export default function TimelinePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [teamParam, selectedMemberId, toast]);
 
   useEffect(() => {
+    setIsLoading(true);
     fetchData();
   }, [fetchData]);
 
-  // Subscribe to real-time updates
+  // Subscribe to real-time updates (personal mode only)
   useEffect(() => {
+    if (isTeamMode) return;
+
     const unsubscribeNewEvent = onNewEvent((newEvent) => {
-      // Prepend new event to the timeline
       setEvents((prev) => {
-        // Check if event already exists
-        if (prev.some((e) => e.id === newEvent.id)) {
-          return prev;
-        }
-        // Keep only the most recent 50 events
+        if (prev.some((e) => e.id === newEvent.id)) return prev;
         return [newEvent as TimelineEvent, ...prev].slice(0, 50);
       });
       addEventGlow(newEvent.id);
-      // Track activity state
       updateSessionActivityState(newEvent.sessionId, newEvent.eventType, newEvent.toolName);
-      // Also update the session's last event info so computeActivityStateFromSession works
       setSessions((prev) =>
         prev.map((s) =>
           s.id === newEvent.sessionId
-            ? {
-                ...s,
-                lastEventType: newEvent.eventType,
-                lastEventToolName: newEvent.toolName,
-                lastEventAt: new Date().toISOString(),
-              }
+            ? { ...s, lastEventType: newEvent.eventType, lastEventToolName: newEvent.toolName, lastEventAt: new Date().toISOString() }
             : s
         )
       );
@@ -229,22 +202,16 @@ export default function TimelinePage() {
 
     const unsubscribeCreated = onSessionCreated((newSession) => {
       setSessions((prev) => {
-        if (prev.some((s) => s.id === newSession.id)) {
-          return prev;
-        }
-        // Keep only the most recent 20 sessions
+        if (prev.some((s) => s.id === newSession.id)) return prev;
         return [newSession as TimelineSession, ...prev].slice(0, 20);
       });
       addSessionGlow(newSession.id);
-      // New sessions start as working
       updateSessionActivityState(newSession.id, "session_start");
     });
 
     const unsubscribeUpdated = onSessionUpdated((updatedSession) => {
       setSessions((prev) =>
-        prev.map((s) =>
-          s.id === updatedSession.id ? (updatedSession as TimelineSession) : s
-        )
+        prev.map((s) => (s.id === updatedSession.id ? (updatedSession as TimelineSession) : s))
       );
       addSessionGlow(updatedSession.id);
     });
@@ -254,44 +221,27 @@ export default function TimelinePage() {
       unsubscribeCreated();
       unsubscribeUpdated();
     };
-  }, [onNewEvent, onSessionCreated, onSessionUpdated, addEventGlow, addSessionGlow, updateSessionActivityState]);
+  }, [isTeamMode, onNewEvent, onSessionCreated, onSessionUpdated, addEventGlow, addSessionGlow, updateSessionActivityState]);
 
-  // Filter sessions based on selected filter
-  const matchesSessionFilter = useCallback((session: TimelineSession, filter: SessionFilter): boolean => {
-    if (filter === "all") return true;
-    const activityState = computeActivityStateFromSession(session);
-    // "Active" means currently doing something (working or waiting), not idle
-    if (filter === "active") return activityState === "working" || activityState === "waiting";
-    if (filter === "working") return activityState === "working";
-    if (filter === "waiting") return activityState === "waiting";
-    if (filter === "idle") return activityState === "idle" || session.status !== "Active";
-    return true;
-  }, []);
-
-  const filteredSessions = sessions.filter((session) => matchesSessionFilter(session, sessionFilter));
+  const filteredSessions = sessions.filter((s) => matchesSessionFilter(s, sessionFilter));
   const filteredSessionIds = new Set(filteredSessions.map((s) => s.id));
 
-  // Filter events: cascade from session filter, then apply event filter
   const filteredEvents = events.filter((event) => {
-    // If session filter is active, only show events from visible sessions
-    if (sessionFilter !== "all" && !filteredSessionIds.has(event.sessionId)) {
-      return false;
-    }
+    if (sessionFilter !== "all" && !filteredSessionIds.has(event.sessionId)) return false;
     return matchesEventFilter(event.eventType, event.toolName, eventFilter);
   });
 
-  // Group filtered events by date
   const groupedEvents = filteredEvents.reduce(
     (groups, event) => {
       const date = new Date(event.createdAt).toLocaleDateString();
-      if (!groups[date]) {
-        groups[date] = [];
-      }
+      if (!groups[date]) groups[date] = [];
       groups[date].push(event);
       return groups;
     },
     {} as Record<string, TimelineEvent[]>
   );
+
+  const currentTeam = teams.find((t) => t.id === teamParam);
 
   if (isLoading) {
     return (
@@ -310,28 +260,75 @@ export default function TimelinePage() {
     <div className="space-y-6 overflow-hidden">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold">Timeline</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Timeline</h1>
           <p className="text-muted-foreground">
-            A chronological view of your session activity
+            {isTeamMode && currentTeam
+              ? `Chronological view of ${currentTeam.name} activity`
+              : "A chronological view of your session activity"}
           </p>
         </div>
-        <ConnectionStatus />
-      </div>
-
-      <div className="p-3 rounded-lg border bg-card">
-        <ActivityStats />
-      </div>
-
-      {/* Pixel Progress Visualization Toggle */}
-      <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <p className="text-sm font-medium">Session Visualization</p>
-            <p className="text-xs text-muted-foreground">Show pixel art progress for active sessions</p>
-          </div>
-        </div>
         <div className="flex items-center gap-2">
+          {/* Context switcher */}
+          {teams.length > 0 && (
+            <Select value={teamParam || "personal"} onValueChange={setTeamContext}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="personal">My Timeline</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    <span className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      {team.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Member filter (team mode) */}
+          {isTeamMode && teamDetail && teamDetail.members.length > 1 && (
+            <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All members" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                {teamDetail.members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    <span className="flex items-center gap-1.5">
+                      <Avatar className="h-4 w-4">
+                        <AvatarImage src={m.image || undefined} />
+                        <AvatarFallback className="text-[8px]">{(m.name || m.email || "?").charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      {m.name || m.email}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {!isTeamMode && <ConnectionStatus />}
+        </div>
+      </div>
+
+      {!isTeamMode && (
+        <div className="p-3 rounded-lg border bg-card">
+          <ActivityStats />
+        </div>
+      )}
+
+      {/* Pixel Progress Visualization Toggle (personal only) */}
+      {!isTeamMode && (
+        <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Session Visualization</p>
+              <p className="text-xs text-muted-foreground">Show pixel art progress for active sessions</p>
+            </div>
+          </div>
           <button
             onClick={() => setShowPixelProgress(!showPixelProgress)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${showPixelProgress ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
@@ -339,10 +336,9 @@ export default function TimelinePage() {
             {showPixelProgress ? 'Hide' : 'Show'}
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Combined Pixel Progress Visualization */}
-      {showPixelProgress && (
+      {!isTeamMode && showPixelProgress && (
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -395,13 +391,15 @@ export default function TimelinePage() {
           <CardContent className="space-y-3 overflow-hidden">
             {filteredSessions.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                {sessions.length === 0 ? "No sessions yet" : "No matching sessions"}
+                {sessions.length === 0
+                  ? isTeamMode ? "No team sessions yet" : "No sessions yet"
+                  : "No matching sessions"}
               </p>
             ) : (
               filteredSessions.slice(0, 10).map((session) => {
-                const activityState = computeActivityStateFromSession(session);
-                const shouldPulse = highlightType && activityState === highlightType;
-                const shouldStatsHover = hoverHighlightType && activityState === hoverHighlightType;
+                const activityState = computeActivityState(session);
+                const shouldPulse = !isTeamMode && highlightType && activityState === highlightType;
+                const shouldStatsHover = !isTeamMode && hoverHighlightType && activityState === hoverHighlightType;
                 const isEventHovered = hoveredEventSessionId === session.id;
                 const isHighlighted = isEventHovered || shouldStatsHover;
                 return (
@@ -417,10 +415,19 @@ export default function TimelinePage() {
                     onMouseLeave={() => setHoveredSessionId(null)}
                   >
                     <div className="space-y-1">
+                      {/* Member attribution (team mode) */}
+                      {isTeamMode && session.memberName && (
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Avatar className="h-4 w-4">
+                            <AvatarImage src={session.memberImage || undefined} />
+                            <AvatarFallback className="text-[8px]">{session.memberName.charAt(0).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-muted-foreground">{session.memberName}</span>
+                        </div>
+                      )}
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-sm break-words min-w-0">
-                          {session.title ||
-                            `Session ${session.localSessionId.slice(0, 8)}`}
+                          {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
                         </p>
                         {activityState === "waiting" ? (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 shrink-0">
@@ -446,16 +453,12 @@ export default function TimelinePage() {
                       <div className="flex items-center text-xs text-muted-foreground flex-wrap gap-x-2">
                         <span className="flex items-center">
                           <Folder className="h-3 w-3 mr-1 shrink-0" />
-                          <span className="break-words">
-                            {session.projectPath.split(/[/\\]/).pop()}
-                          </span>
+                          <span className="break-words">{session.projectPath.split(/[/\\]/).pop()}</span>
                         </span>
                         {session.machine && (
                           <span className="flex items-center">
                             <Monitor className="h-3 w-3 mr-1 shrink-0" />
-                            <span className="break-words">
-                              {session.machine.name || session.machine.machineId.slice(0, 8)}
-                            </span>
+                            <span className="break-words">{session.machine.name || session.machine.machineId.slice(0, 8)}</span>
                           </span>
                         )}
                       </div>
@@ -500,26 +503,35 @@ export default function TimelinePage() {
           </CardHeader>
           <CardContent className="overflow-hidden">
             {filteredEvents.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                {events.length === 0
-                  ? "No events yet. Start using Claude Code to see your activity here."
-                  : `No ${eventFilter === "all" ? "" : eventFilter + " "}events found.`}
-              </p>
+              <div className="text-center py-8">
+                {isTeamMode ? (
+                  <>
+                    <Users className="h-10 w-10 mx-auto text-muted-foreground/50" />
+                    <p className="text-muted-foreground mt-2">
+                      {events.length === 0
+                        ? "No team activity yet. Team members need to use tokens scoped to this team."
+                        : `No ${eventFilter === "all" ? "" : eventFilter + " "}events found.`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">
+                    {events.length === 0
+                      ? "No events yet. Start using Claude Code to see your activity here."
+                      : `No ${eventFilter === "all" ? "" : eventFilter + " "}events found.`}
+                  </p>
+                )}
+              </div>
             ) : (
               <div className="space-y-6 overflow-hidden">
                 {Object.entries(groupedEvents).map(([date, dateEvents]) => (
                   <div key={date}>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                      {date}
-                    </h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3">{date}</h3>
                     <div className="space-y-3 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
                       {dateEvents.map((event) => {
-                        const session = sessions.find(
-                          (s) => s.id === event.sessionId
-                        );
-                        const sessionActivityState = session ? computeActivityStateFromSession(session) : "idle";
+                        const session = sessions.find((s) => s.id === event.sessionId);
+                        const sessionActivityState = session ? computeActivityState(session) : "idle";
                         const isSessionHovered = hoveredSessionId === event.sessionId;
-                        const isStatsHovered = hoverHighlightType && sessionActivityState === hoverHighlightType;
+                        const isStatsHovered = !isTeamMode && hoverHighlightType && sessionActivityState === hoverHighlightType;
                         const isHighlighted = isSessionHovered || isStatsHovered;
                         return (
                           <div
@@ -549,136 +561,90 @@ export default function TimelinePage() {
                                 ? "border-orange-500 bg-orange-100 dark:bg-orange-900/30"
                                 : isHighlighted ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : "border-primary bg-background"
                             }`}>
-                              {event.eventType === "session_end" ? (
-                                <Square className="h-3 w-3 text-red-500" />
-                              ) : event.eventType === "stop" ? (
-                                <Square className="h-3 w-3 text-gray-500" />
-                              ) : event.eventType === "session_start" ? (
-                                <Play className="h-3 w-3 text-green-500" />
-                              ) : event.eventType === "user_prompt" ? (
-                                <MessageSquare className="h-3 w-3 text-blue-500" />
-                              ) : event.eventType === "permission_request" ? (
-                                <ShieldAlert className="h-3 w-3 text-amber-500" />
-                              ) : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName?.toLowerCase() === "askuserquestion" ? (
-                                <MessageSquareMore className="h-3 w-3 text-amber-500" />
-                              ) : event.eventType === "tool_use" || event.eventType === "tool_use_start" ? (
-                                <Wrench className="h-3 w-3 text-purple-500" />
-                              ) : event.eventType === "context_compaction" ? (
-                                <RefreshCw className="h-3 w-3 text-orange-500" />
-                              ) : (
-                                <Activity className="h-3 w-3 text-primary" />
-                              )}
+                              {event.eventType === "session_end" ? <Square className="h-3 w-3 text-red-500" />
+                                : event.eventType === "stop" ? <Square className="h-3 w-3 text-gray-500" />
+                                : event.eventType === "session_start" ? <Play className="h-3 w-3 text-green-500" />
+                                : event.eventType === "user_prompt" ? <MessageSquare className="h-3 w-3 text-blue-500" />
+                                : event.eventType === "permission_request" ? <ShieldAlert className="h-3 w-3 text-amber-500" />
+                                : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName?.toLowerCase() === "askuserquestion" ? <MessageSquareMore className="h-3 w-3 text-amber-500" />
+                                : event.eventType === "tool_use" || event.eventType === "tool_use_start" ? <Wrench className="h-3 w-3 text-purple-500" />
+                                : event.eventType === "context_compaction" ? <RefreshCw className="h-3 w-3 text-orange-500" />
+                                : <Activity className="h-3 w-3 text-primary" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 {event.eventType === "session_end" ? (
-                                  <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">
-                                    Session ended
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">Session ended</Badge>
                                 ) : event.eventType === "stop" ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    Session paused
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">Session paused</Badge>
                                 ) : event.eventType === "session_start" ? (
-                                  <Badge variant="outline" className="text-xs border-green-300 text-green-700 dark:border-green-700 dark:text-green-300">
-                                    Session started
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs border-green-300 text-green-700 dark:border-green-700 dark:text-green-300">Session started</Badge>
                                 ) : event.eventType === "user_prompt" ? (
-                                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
-                                    Prompt
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">Prompt</Badge>
                                 ) : event.eventType === "permission_request" ? (
-                                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
-                                    Permission needed
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">Permission needed</Badge>
                                 ) : event.eventType === "context_compaction" ? (
-                                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
-                                    Compaction
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">Compaction</Badge>
                                 ) : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName ? (
-                                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">
-                                    {event.toolName}
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">{event.toolName}</Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-xs">
-                                    {event.eventType}
-                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">{event.eventType}</Badge>
                                 )}
                                 {(() => {
-                                  // Special handling for AskUserQuestion
                                   if (event.toolName?.toLowerCase() === "askuserquestion") {
                                     const question = getToolDisplayInfo(event.toolName, event.metadata);
                                     const answer = getAskUserAnswer(event.toolName, event.metadata);
                                     const isWaiting = event.eventType === "tool_use_start";
                                     return (
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        {question && (
-                                          <span className="text-xs text-muted-foreground italic break-words">
-                                            &quot;{question}&quot;
-                                          </span>
-                                        )}
+                                        {question && <span className="text-xs text-muted-foreground italic break-words">&quot;{question}&quot;</span>}
                                         {isWaiting ? (
-                                          <span className="text-xs text-amber-600 dark:text-amber-400">
-                                            Waiting for response...
-                                          </span>
+                                          <span className="text-xs text-amber-600 dark:text-amber-400">Waiting for response...</span>
                                         ) : answer ? (
-                                          <span className="text-xs text-green-600 dark:text-green-400 break-words">
-                                            → {answer}
-                                          </span>
+                                          <span className="text-xs text-green-600 dark:text-green-400 break-words">&rarr; {answer}</span>
                                         ) : null}
                                       </div>
                                     );
                                   }
-
-                                  // Special handling for permission requests
                                   if (event.eventType === "permission_request") {
                                     const permInfo = getPermissionRequestInfo(event.eventType, event.toolName, event.metadata);
                                     if (permInfo) {
                                       return (
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <span className="text-xs text-muted-foreground break-words">
-                                            {permInfo.tool}{permInfo.action ? `: ${permInfo.action}` : ""}
-                                          </span>
-                                          <span className="text-xs text-amber-600 dark:text-amber-400">
-                                            Waiting for approval...
-                                          </span>
+                                          <span className="text-xs text-muted-foreground break-words">{permInfo.tool}{permInfo.action ? `: ${permInfo.action}` : ""}</span>
+                                          <span className="text-xs text-amber-600 dark:text-amber-400">Waiting for approval...</span>
                                         </div>
                                       );
                                     }
                                   }
-
                                   const toolInfo = getToolDisplayInfo(event.toolName, event.metadata);
                                   if (toolInfo) {
-                                    return (
-                                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded block truncate max-w-[200px] sm:max-w-[300px] md:max-w-full">
-                                        {toolInfo}
-                                      </code>
-                                    );
+                                    return <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded block truncate max-w-[200px] sm:max-w-[300px] md:max-w-full">{toolInfo}</code>;
                                   }
-                                  // Fall back to summary for non-tool events (like user_prompt)
                                   if (event.eventType !== "tool_use" && event.eventType !== "tool_use_start" && event.summary) {
-                                    return (
-                                      <span className="text-xs text-muted-foreground truncate block max-w-[200px] sm:max-w-[300px] md:max-w-full">
-                                        {event.summary}
-                                      </span>
-                                    );
+                                    return <span className="text-xs text-muted-foreground truncate block max-w-[200px] sm:max-w-[300px] md:max-w-full">{event.summary}</span>;
                                   }
                                   return null;
                                 })()}
                               </div>
-                              <div className="flex items-center mt-1 text-xs text-muted-foreground">
-                                <span>
-                                  {new Date(event.createdAt).toLocaleTimeString()}
-                                </span>
-                                {session && (
+                              <div className="flex items-center mt-1 text-xs text-muted-foreground gap-1.5">
+                                {/* Member attribution (team mode) */}
+                                {isTeamMode && event.memberName && (
                                   <>
-                                    <ArrowRight className="h-3 w-3 mx-1" />
-                                    <Link
-                                      href={`/sessions/${session.id}`}
-                                      className="hover:underline"
-                                    >
-                                      {session.title ||
-                                        session.localSessionId.slice(0, 8)}
+                                    <Avatar className="h-3.5 w-3.5">
+                                      <AvatarImage src={event.memberImage || undefined} />
+                                      <AvatarFallback className="text-[7px]">{event.memberName.charAt(0).toUpperCase()}</AvatarFallback>
+                                    </Avatar>
+                                    <span>{event.memberName}</span>
+                                    <span>&middot;</span>
+                                  </>
+                                )}
+                                <span>{new Date(event.createdAt).toLocaleTimeString()}</span>
+                                {(session || event.sessionTitle) && (
+                                  <>
+                                    <ArrowRight className="h-3 w-3" />
+                                    <Link href={`/sessions/${event.sessionId}`} className="hover:underline">
+                                      {session?.title || event.sessionTitle || event.sessionId.slice(0, 8)}
                                     </Link>
                                   </>
                                 )}

@@ -271,6 +271,9 @@ public class TeamService : ITeamService
             EventType = e.EventType,
             ToolName = e.ToolName,
             Summary = e.Summary,
+            Metadata = e.Metadata != null
+                ? System.Text.Json.JsonSerializer.Deserialize<object>(e.Metadata.RootElement.GetRawText())
+                : null,
             CreatedAt = e.CreatedAt,
             MemberName = e.Session.User.Name ?? e.Session.User.Email,
             MemberImage = e.Session.User.Image

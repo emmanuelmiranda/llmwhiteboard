@@ -1,14 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { formatRelativeTime } from "@/lib/utils";
-import { Folder, Activity, GripVertical, Plus, X } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import { Folder, Activity, GripVertical, Plus, X, Users } from "lucide-react";
+import { apiClient, type Team, type TeamDetail, type TeamSession } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
 
 interface WhiteboardSession {
@@ -19,6 +28,8 @@ interface WhiteboardSession {
   status: SessionStatus;
   lastActivityAt: string;
   eventCount: number;
+  memberName?: string;
+  memberImage?: string | null;
 }
 
 interface Group {
@@ -45,22 +56,66 @@ const groupColors = [
 ];
 
 export default function WhiteboardPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const teamParam = searchParams.get("team");
+
   const [sessions, setSessions] = useState<WhiteboardSession[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [draggedSession, setDraggedSession] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("all");
   const { toast } = useToast();
+
+  const isTeamMode = !!teamParam;
+  const groupsKey = teamParam ? `llmwhiteboard-groups-team-${teamParam}` : "llmwhiteboard-groups";
+
+  // Fetch teams for context switcher
+  useEffect(() => {
+    apiClient.getTeams().then((data) => setTeams(data.teams || [])).catch(() => {});
+  }, []);
+
+  // Fetch team detail when in team mode
+  useEffect(() => {
+    if (teamParam) {
+      apiClient.getTeamDetail(teamParam).then(setTeamDetail).catch(() => setTeamDetail(null));
+    } else {
+      setTeamDetail(null);
+    }
+  }, [teamParam]);
+
+  const setTeamContext = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "personal") {
+      params.delete("team");
+    } else {
+      params.set("team", value);
+    }
+    setSelectedMemberId("all");
+    router.push(`/whiteboard?${params.toString()}`);
+  };
 
   useEffect(() => {
     const fetchSessions = async () => {
+      setIsLoading(true);
       try {
-        const data = await apiClient.getSessions({ limit: 50 });
-        setSessions(data.sessions || []);
+        if (teamParam) {
+          const memberId = selectedMemberId === "all" ? undefined : selectedMemberId;
+          const data = await apiClient.getTeamSessions(teamParam, { memberId, limit: 50 });
+          setSessions(data.sessions || []);
+        } else {
+          const data = await apiClient.getSessions({ limit: 50 });
+          setSessions(data.sessions || []);
+        }
 
-        // Load saved groups from localStorage
-        const savedGroups = localStorage.getItem("llmwhiteboard-groups");
+        // Load saved groups from localStorage (scoped by context)
+        const savedGroups = localStorage.getItem(groupsKey);
         if (savedGroups) {
           setGroups(JSON.parse(savedGroups));
+        } else {
+          setGroups([]);
         }
       } catch (error) {
         toast({
@@ -74,12 +129,12 @@ export default function WhiteboardPage() {
     };
 
     fetchSessions();
-  }, [toast]);
+  }, [teamParam, selectedMemberId, groupsKey, toast]);
 
   const saveGroups = useCallback((newGroups: Group[]) => {
     setGroups(newGroups);
-    localStorage.setItem("llmwhiteboard-groups", JSON.stringify(newGroups));
-  }, []);
+    localStorage.setItem(groupsKey, JSON.stringify(newGroups));
+  }, [groupsKey]);
 
   const addGroup = () => {
     const newGroup: Group = {
@@ -103,13 +158,11 @@ export default function WhiteboardPage() {
   const handleDrop = (groupId: string) => {
     if (!draggedSession) return;
 
-    // Remove from other groups
     const newGroups = groups.map((g) => ({
       ...g,
       sessions: g.sessions.filter((s) => s !== draggedSession),
     }));
 
-    // Add to target group
     const targetGroup = newGroups.find((g) => g.id === groupId);
     if (targetGroup && !targetGroup.sessions.includes(draggedSession)) {
       targetGroup.sessions.push(draggedSession);
@@ -136,6 +189,8 @@ export default function WhiteboardPage() {
     {} as Record<string, WhiteboardSession[]>
   );
 
+  const currentTeam = teams.find((t) => t.id === teamParam);
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -151,13 +206,58 @@ export default function WhiteboardPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Whiteboard</h1>
           <p className="text-muted-foreground">
-            Organize and group your sessions visually
+            {isTeamMode && currentTeam
+              ? `Organize ${currentTeam.name} sessions visually`
+              : "Organize and group your sessions visually"}
           </p>
         </div>
-        <Button onClick={addGroup} className="self-start sm:self-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Group
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* Context switcher */}
+          {teams.length > 0 && (
+            <Select value={teamParam || "personal"} onValueChange={setTeamContext}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="personal">My Sessions</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    <span className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      {team.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Member filter (team mode) */}
+          {isTeamMode && teamDetail && teamDetail.members.length > 1 && (
+            <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All members" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                {teamDetail.members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    <span className="flex items-center gap-1.5">
+                      <Avatar className="h-4 w-4">
+                        <AvatarImage src={m.image || undefined} />
+                        <AvatarFallback className="text-[8px]">{(m.name || m.email || "?").charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      {m.name || m.email}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={addGroup}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Group
+          </Button>
+        </div>
       </div>
 
       {/* Custom Groups */}
@@ -198,6 +298,7 @@ export default function WhiteboardPage() {
                         key={session.id}
                         session={session}
                         onDragStart={handleDragStart}
+                        showMember={isTeamMode}
                       />
                     ))
                   )}
@@ -225,6 +326,7 @@ export default function WhiteboardPage() {
                     key={session.id}
                     session={session}
                     onDragStart={handleDragStart}
+                    showMember={isTeamMode}
                   />
                 ))}
               </div>
@@ -237,9 +339,13 @@ export default function WhiteboardPage() {
         <Card className="text-center py-12">
           <CardContent>
             <Folder className="h-12 w-12 mx-auto text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">No sessions yet</h3>
+            <h3 className="mt-4 text-lg font-medium">
+              {isTeamMode ? "No team sessions yet" : "No sessions yet"}
+            </h3>
             <p className="text-muted-foreground mt-2">
-              Start using Claude Code to see your sessions here
+              {isTeamMode
+                ? "Team members need to use tokens scoped to this team"
+                : "Start using Claude Code to see your sessions here"}
             </p>
           </CardContent>
         </Card>
@@ -251,9 +357,11 @@ export default function WhiteboardPage() {
 function SessionMiniCard({
   session,
   onDragStart,
+  showMember,
 }: {
   session: WhiteboardSession;
   onDragStart: (id: string) => void;
+  showMember?: boolean;
 }) {
   return (
     <div
@@ -268,6 +376,15 @@ function SessionMiniCard({
       </div>
       <Link href={`/sessions/${session.id}`} className="min-w-0 flex-1 overflow-hidden" draggable={false}>
         <div className="space-y-1">
+          {showMember && session.memberName && (
+            <div className="flex items-center gap-1.5">
+              <Avatar className="h-4 w-4">
+                <AvatarImage src={session.memberImage || undefined} />
+                <AvatarFallback className="text-[8px]">{session.memberName.charAt(0).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">{session.memberName}</span>
+            </div>
+          )}
           <p className="font-medium text-sm break-words">
             {session.title || `Session ${session.localSessionId.slice(0, 8)}`}
           </p>

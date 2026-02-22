@@ -37,7 +37,6 @@ import type { User } from "@/lib/api-client";
 
 const navItems = [
   { href: "/sessions", label: "Sessions", icon: LayoutDashboard },
-  { href: "/teams", label: "Teams", icon: Users },
   { href: "/timeline", label: "Timeline", icon: Clock },
   { href: "/whiteboard", label: "Whiteboard", icon: Layout },
   { href: "/help", label: "Help", icon: HelpCircle },
@@ -48,6 +47,7 @@ const settingsItems = [
   { href: "/settings/tokens", label: "API Tokens", icon: Key },
   { href: "/settings/shares", label: "Share Links", icon: Link2 },
   { href: "/settings/machines", label: "Machines", icon: Monitor },
+  { href: "/teams", label: "Teams", icon: Users },
 ];
 
 export function DashboardNav({ user }: { user: User }) {
