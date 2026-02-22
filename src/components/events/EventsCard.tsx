@@ -103,7 +103,7 @@ export function EventsCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <LastActionIndicator
-          event={events.length > 0 ? events[0] : null}
+          event={events.find(e => e.eventType !== "stop" && e.eventType !== "session_end" && e.eventType !== "session_start") ?? events[0] ?? null}
           showFullDetails={showFullDetails}
         />
         <EventTimeline
