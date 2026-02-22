@@ -16,6 +16,10 @@ interface SignalRContextValue {
   onSessionUpdated: (callback: (session: Session) => void) => () => void;
   onSessionDeleted: (callback: (sessionId: string) => void) => () => void;
   onNewEvent: (callback: (event: SessionEvent) => void) => () => void;
+  // Team event callbacks (same shape, different SignalR method names)
+  onTeamSessionCreated: (callback: (session: Session) => void) => () => void;
+  onTeamSessionUpdated: (callback: (session: Session) => void) => () => void;
+  onTeamNewEvent: (callback: (event: SessionEvent) => void) => () => void;
   // Highlight state for pulsing waiting/working sessions (on click)
   highlightType: HighlightType;
   triggerHighlight: (type: HighlightType) => void;
@@ -125,6 +129,18 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
     return on("newEvent", callback);
   };
 
+  const onTeamSessionCreated = (callback: (session: Session) => void) => {
+    return on("teamSessionCreated", callback);
+  };
+
+  const onTeamSessionUpdated = (callback: (session: Session) => void) => {
+    return on("teamSessionUpdated", callback);
+  };
+
+  const onTeamNewEvent = (callback: (event: SessionEvent) => void) => {
+    return on("teamNewEvent", callback);
+  };
+
   return (
     <SignalRContext.Provider
       value={{
@@ -135,6 +151,9 @@ export function SignalRProvider({ children }: { children: React.ReactNode }) {
         onSessionUpdated,
         onSessionDeleted,
         onNewEvent,
+        onTeamSessionCreated,
+        onTeamSessionUpdated,
+        onTeamNewEvent,
         highlightType,
         triggerHighlight,
         hoverHighlightType,

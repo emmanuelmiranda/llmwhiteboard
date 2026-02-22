@@ -99,6 +99,9 @@ export default function TimelinePage() {
     onSessionCreated,
     onSessionUpdated,
     onNewEvent,
+    onTeamSessionCreated,
+    onTeamSessionUpdated,
+    onTeamNewEvent,
     highlightType,
     hoverHighlightType,
     updateSessionActivityState,
@@ -180,11 +183,9 @@ export default function TimelinePage() {
     fetchData();
   }, [fetchData]);
 
-  // Subscribe to real-time updates (personal mode only)
+  // Subscribe to real-time updates (personal or team mode)
   useEffect(() => {
-    if (isTeamMode) return;
-
-    const unsubscribeNewEvent = onNewEvent((newEvent) => {
+    const handleNewEvent = (newEvent: SessionEvent) => {
       setEvents((prev) => {
         if (prev.some((e) => e.id === newEvent.id)) return prev;
         return [newEvent as TimelineEvent, ...prev].slice(0, 50);
@@ -198,30 +199,38 @@ export default function TimelinePage() {
             : s
         )
       );
-    });
+    };
 
-    const unsubscribeCreated = onSessionCreated((newSession) => {
+    const handleSessionCreated = (newSession: Session) => {
       setSessions((prev) => {
         if (prev.some((s) => s.id === newSession.id)) return prev;
         return [newSession as TimelineSession, ...prev].slice(0, 20);
       });
       addSessionGlow(newSession.id);
       updateSessionActivityState(newSession.id, "session_start");
-    });
+    };
 
-    const unsubscribeUpdated = onSessionUpdated((updatedSession) => {
+    const handleSessionUpdated = (updatedSession: Session) => {
       setSessions((prev) =>
         prev.map((s) => (s.id === updatedSession.id ? (updatedSession as TimelineSession) : s))
       );
       addSessionGlow(updatedSession.id);
-    });
-
-    return () => {
-      unsubscribeNewEvent();
-      unsubscribeCreated();
-      unsubscribeUpdated();
     };
-  }, [isTeamMode, onNewEvent, onSessionCreated, onSessionUpdated, addEventGlow, addSessionGlow, updateSessionActivityState]);
+
+    if (isTeamMode) {
+      // Team mode: subscribe to team events
+      const unsubNewEvent = onTeamNewEvent(handleNewEvent);
+      const unsubCreated = onTeamSessionCreated(handleSessionCreated);
+      const unsubUpdated = onTeamSessionUpdated(handleSessionUpdated);
+      return () => { unsubNewEvent(); unsubCreated(); unsubUpdated(); };
+    } else {
+      // Personal mode: subscribe to personal events
+      const unsubNewEvent = onNewEvent(handleNewEvent);
+      const unsubCreated = onSessionCreated(handleSessionCreated);
+      const unsubUpdated = onSessionUpdated(handleSessionUpdated);
+      return () => { unsubNewEvent(); unsubCreated(); unsubUpdated(); };
+    }
+  }, [isTeamMode, onNewEvent, onSessionCreated, onSessionUpdated, onTeamNewEvent, onTeamSessionCreated, onTeamSessionUpdated, addEventGlow, addSessionGlow, updateSessionActivityState]);
 
   const filteredSessions = sessions.filter((s) => matchesSessionFilter(s, sessionFilter));
   const filteredSessionIds = new Set(filteredSessions.map((s) => s.id));
@@ -309,7 +318,7 @@ export default function TimelinePage() {
               </SelectContent>
             </Select>
           )}
-          {!isTeamMode && <ConnectionStatus />}
+          <ConnectionStatus />
         </div>
       </div>
 
@@ -319,31 +328,29 @@ export default function TimelinePage() {
         </div>
       )}
 
-      {/* Pixel Progress Visualization Toggle (personal only) */}
-      {!isTeamMode && (
-        <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
-          <div className="flex items-center gap-3">
-            <Sparkles className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium">Session Visualization</p>
-              <p className="text-xs text-muted-foreground">Show pixel art progress for active sessions</p>
-            </div>
+      {/* Pixel Progress Visualization Toggle */}
+      <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+        <div className="flex items-center gap-3">
+          <Sparkles className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">Session Visualization</p>
+            <p className="text-xs text-muted-foreground">Show pixel art progress for active sessions</p>
           </div>
-          <button
-            onClick={() => setShowPixelProgress(!showPixelProgress)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${showPixelProgress ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-          >
-            {showPixelProgress ? 'Hide' : 'Show'}
-          </button>
         </div>
-      )}
+        <button
+          onClick={() => setShowPixelProgress(!showPixelProgress)}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${showPixelProgress ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+        >
+          {showPixelProgress ? 'Hide' : 'Show'}
+        </button>
+      </div>
 
-      {!isTeamMode && showPixelProgress && (
+      {showPixelProgress && (
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
-              Combined Activity Visualization
+              {isTeamMode ? "Team Activity Visualization" : "Combined Activity Visualization"}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-2">
@@ -353,6 +360,7 @@ export default function TimelinePage() {
                 size="full"
                 soundEnabled={soundEnabled}
                 onSoundToggle={setSoundEnabled}
+                teamMode={isTeamMode}
               />
             </div>
           </CardContent>

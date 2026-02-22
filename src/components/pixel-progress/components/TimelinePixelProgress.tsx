@@ -69,6 +69,8 @@ export interface TimelinePixelProgressProps {
   theme?: string
   /** Additional class name */
   className?: string
+  /** Subscribe to team events instead of personal events */
+  teamMode?: boolean
 }
 
 function timelineEventToProgressEvent(event: TimelineEvent): ProgressEvent {
@@ -111,6 +113,7 @@ export function TimelinePixelProgress({
   size = 'md',
   theme = 'lego',
   className,
+  teamMode = false,
 }: TimelinePixelProgressProps) {
   const signalR = useSignalRContext()
   const [events, setEvents] = React.useState<ProgressEvent[]>([])
@@ -124,21 +127,25 @@ export function TimelinePixelProgress({
     processedIds.current = new Set(initialEvents.map(e => e.id))
   }, [initialEvents])
 
-  // Subscribe to real-time events from ALL sessions
+  // Subscribe to real-time events from ALL sessions (personal or team)
   useEffect(() => {
     if (!signalR) return
 
-    const unsubscribe = signalR.onNewEvent((event: TimelineEvent) => {
+    const handler = (event: TimelineEvent) => {
       // Skip if already processed
       if (processedIds.current.has(event.id)) return
       processedIds.current.add(event.id)
 
       const progressEvent = timelineEventToProgressEvent(event)
       setEvents(prev => [...prev, progressEvent])
-    })
+    }
+
+    const unsubscribe = teamMode
+      ? signalR.onTeamNewEvent(handler)
+      : signalR.onNewEvent(handler)
 
     return unsubscribe
-  }, [signalR])
+  }, [signalR, teamMode])
 
   console.log('[TimelinePixelProgress] Rendering with', events.length, 'events, size:', size)
 
