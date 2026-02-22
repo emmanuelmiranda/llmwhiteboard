@@ -100,6 +100,20 @@ const COLOR_MAP: Record<string, ColorClasses> = {
   },
 };
 
+// --- Hex colors for pixel art themes ---
+
+const DISPLAY_COLOR_TO_HEX: Record<string, string> = {
+  red: '#F44336',
+  green: '#4CAF50',
+  blue: '#2196F3',
+  purple: '#9C27B0',
+  amber: '#FFC107',
+  orange: '#FF9800',
+  gray: '#9E9E9E',
+  cyan: '#00BCD4',
+  pink: '#E91E63',
+};
+
 // --- Pixel categories ---
 
 const VALID_CATEGORIES = new Set([
@@ -146,6 +160,12 @@ export function resolveIcon(iconKey: string | null, fallback: LucideIcon): Lucid
 export function resolveColor(colorKey: string | null, fallbackKey: string): ColorClasses {
   if (colorKey && colorKey in COLOR_MAP) return COLOR_MAP[colorKey];
   return COLOR_MAP[fallbackKey] ?? COLOR_MAP.purple;
+}
+
+/** Resolve a color key to a hex color for pixel art themes. Returns null if invalid. */
+export function resolveHexColor(colorKey: string | null): string | null {
+  if (colorKey && colorKey in DISPLAY_COLOR_TO_HEX) return DISPLAY_COLOR_TO_HEX[colorKey];
+  return null;
 }
 
 export { VALID_CATEGORIES };

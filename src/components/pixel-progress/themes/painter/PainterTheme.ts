@@ -110,7 +110,7 @@ export class PainterTheme extends BaseTheme {
     ctx.ctx.scale(scale * piece.size, scale * piece.size)
 
     // Get color
-    const color = piece.color ?? this.getPieceColor(piece.category, piece.variant)
+    const color = (piece.metadata?.displayHexColor as string) ?? piece.color ?? this.getPieceColor(piece.category, piece.variant)
 
     // Draw the stroke - different shapes based on variant
     this.drawStroke(ctx.ctx, piece.variant, color)
@@ -200,7 +200,7 @@ export class PainterTheme extends BaseTheme {
       // Only connect if pieces are relatively close
       const dist = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2))
       if (dist < 40) {
-        const color = piece.color ?? this.getPieceColor(piece.category, piece.variant)
+        const color = (piece.metadata?.displayHexColor as string) ?? piece.color ?? this.getPieceColor(piece.category, piece.variant)
         ctx.ctx.strokeStyle = color
 
         ctx.ctx.beginPath()

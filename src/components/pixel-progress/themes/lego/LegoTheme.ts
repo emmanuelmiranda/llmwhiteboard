@@ -569,8 +569,10 @@ export class LegoTheme extends BaseTheme {
     ctx.ctx.translate(x, y + offsetY)
     ctx.ctx.scale(scale, scale)
 
-    // Get brick color - prefer tool-specific color over category color
-    const color = piece.color
+    // Get brick color - display hint > piece.color > tool-specific > category
+    const displayHexColor = piece.metadata?.displayHexColor as string | undefined
+    const color = displayHexColor
+      ?? piece.color
       ?? (toolName && TOOL_COLORS[toolName])
       ?? BRICK_COLORS[piece.category]
       ?? BRICK_COLORS.default

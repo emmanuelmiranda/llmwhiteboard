@@ -11,7 +11,7 @@ import React, { useEffect, useMemo, useCallback, useRef } from 'react'
 import { PixelProgress } from './PixelProgress'
 import type { ProgressEvent } from '../types'
 import { useSignalRContext } from '@/components/signalr-provider'
-import { getDisplayHints, VALID_CATEGORIES } from '@/lib/display-hints'
+import { getDisplayHints, resolveHexColor, VALID_CATEGORIES } from '@/lib/display-hints'
 
 // Map session event types to pixel-progress categories
 const EVENT_TYPE_TO_CATEGORY: Record<string, string> = {
@@ -99,6 +99,9 @@ function timelineEventToProgressEvent(event: TimelineEvent): ProgressEvent {
     if (event.eventType === 'session_end') weight = 0
   }
 
+  // Resolve display color to hex for pixel art themes
+  const displayHexColor = resolveHexColor(hints.color)
+
   return {
     id: event.id,
     category,
@@ -110,6 +113,7 @@ function timelineEventToProgressEvent(event: TimelineEvent): ProgressEvent {
       toolName: event.toolName,
       sessionId: event.sessionId,
       ...event.metadata,
+      ...(displayHexColor ? { displayHexColor } : {}),
     },
   }
 }
