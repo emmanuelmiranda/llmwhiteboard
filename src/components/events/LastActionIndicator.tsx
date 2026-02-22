@@ -20,7 +20,7 @@ export function LastActionIndicator({ event, showFullDetails = true }: LastActio
     );
   }
 
-  const { Icon, iconColor, isUserPrompt, isToolUse, isSubagentStop } = getEventIconInfo(event.eventType);
+  const { Icon, iconColor, isUserPrompt, isToolUse, isSubagentStop } = getEventIconInfo(event.eventType, event.metadata);
   const isStop = event.eventType === "stop" || event.eventType === "session_end" || event.eventType === "agent_stop";
   const isActive = event.eventType === "tool_use_start" || event.eventType === "user_prompt";
 

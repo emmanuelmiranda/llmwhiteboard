@@ -26,7 +26,7 @@ import {
 } from "@/lib/session-utils";
 import {
   Activity, Folder, Clock, ArrowRight, Monitor, Loader2, MessageSquareMore,
-  Square, Wrench, MessageSquare, Play, RefreshCw, ShieldAlert, Sparkles, Users,
+  Sparkles, Users,
 } from "lucide-react";
 import { apiClient, type Session, type Team, type TeamDetail, type TeamSession, type SessionEvent, type TeamActivityEvent } from "@/lib/api-client";
 import type { SessionStatus } from "@/types";
@@ -34,7 +34,7 @@ import { useSignalRContext } from "@/components/signalr-provider";
 import { ConnectionStatus } from "@/components/connection-status";
 import { ActivityStats } from "@/components/activity-stats";
 import { TimelinePixelProgress } from "@/components/pixel-progress";
-import { getToolDisplayInfo, getAskUserAnswer, getPermissionRequestInfo } from "@/components/events/event-utils";
+import { getTimelineEventStyle, getToolDisplayInfo, getAskUserAnswer, getPermissionRequestInfo } from "@/components/events/event-utils";
 
 // Unified event type covering both personal and team events
 interface TimelineEvent {
@@ -541,6 +541,8 @@ export default function TimelinePage() {
                         const isSessionHovered = hoveredSessionId === event.sessionId;
                         const isStatsHovered = !isTeamMode && hoverHighlightType && sessionActivityState === hoverHighlightType;
                         const isHighlighted = isSessionHovered || isStatsHovered;
+                        const eventStyle = getTimelineEventStyle(event.eventType, event.toolName, event.metadata);
+                        const EventIcon = eventStyle.Icon;
                         return (
                           <div
                             key={event.id}
@@ -551,53 +553,15 @@ export default function TimelinePage() {
                             onMouseLeave={() => setHoveredEventSessionId(null)}
                           >
                             <div className={`absolute left-0 top-1 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              event.eventType === "session_end"
-                                ? "border-red-500 bg-red-100 dark:bg-red-900/30"
-                                : event.eventType === "stop"
-                                ? "border-gray-400 bg-gray-100 dark:bg-gray-800"
-                                : event.eventType === "session_start"
-                                ? "border-green-500 bg-green-100 dark:bg-green-900/30"
-                                : event.eventType === "user_prompt"
-                                ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30"
-                                : event.eventType === "permission_request"
-                                ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30"
-                                : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName?.toLowerCase() === "askuserquestion"
-                                ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30"
-                                : event.eventType === "tool_use" || event.eventType === "tool_use_start"
-                                ? "border-purple-500 bg-purple-100 dark:bg-purple-900/30"
-                                : event.eventType === "context_compaction"
-                                ? "border-orange-500 bg-orange-100 dark:bg-orange-900/30"
-                                : isHighlighted ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : "border-primary bg-background"
+                              isHighlighted && !eventStyle.circleClass.includes("border-") ? "border-amber-500 bg-amber-200 dark:bg-amber-800" : eventStyle.circleClass
                             }`}>
-                              {event.eventType === "session_end" ? <Square className="h-3 w-3 text-red-500" />
-                                : event.eventType === "stop" ? <Square className="h-3 w-3 text-gray-500" />
-                                : event.eventType === "session_start" ? <Play className="h-3 w-3 text-green-500" />
-                                : event.eventType === "user_prompt" ? <MessageSquare className="h-3 w-3 text-blue-500" />
-                                : event.eventType === "permission_request" ? <ShieldAlert className="h-3 w-3 text-amber-500" />
-                                : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName?.toLowerCase() === "askuserquestion" ? <MessageSquareMore className="h-3 w-3 text-amber-500" />
-                                : event.eventType === "tool_use" || event.eventType === "tool_use_start" ? <Wrench className="h-3 w-3 text-purple-500" />
-                                : event.eventType === "context_compaction" ? <RefreshCw className="h-3 w-3 text-orange-500" />
-                                : <Activity className="h-3 w-3 text-primary" />}
+                              <EventIcon className={`h-3 w-3 ${eventStyle.iconColor}`} />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                {event.eventType === "session_end" ? (
-                                  <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">Session ended</Badge>
-                                ) : event.eventType === "stop" ? (
-                                  <Badge variant="outline" className="text-xs">Session paused</Badge>
-                                ) : event.eventType === "session_start" ? (
-                                  <Badge variant="outline" className="text-xs border-green-300 text-green-700 dark:border-green-700 dark:text-green-300">Session started</Badge>
-                                ) : event.eventType === "user_prompt" ? (
-                                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">Prompt</Badge>
-                                ) : event.eventType === "permission_request" ? (
-                                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">Permission needed</Badge>
-                                ) : event.eventType === "context_compaction" ? (
-                                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">Compaction</Badge>
-                                ) : (event.eventType === "tool_use" || event.eventType === "tool_use_start") && event.toolName ? (
-                                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300">{event.toolName}</Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs">{event.eventType}</Badge>
-                                )}
+                                <Badge variant="outline" className={`text-xs ${eventStyle.badgeClass}`}>
+                                  {eventStyle.badgeLabel}
+                                </Badge>
                                 {(() => {
                                   if (event.toolName?.toLowerCase() === "askuserquestion") {
                                     const question = getToolDisplayInfo(event.toolName, event.metadata);

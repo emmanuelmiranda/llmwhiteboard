@@ -1,4 +1,5 @@
 import { MessageSquare, Wrench, Activity, Square, Play, Zap, GitBranch, MessageSquareMore, ShieldAlert, RefreshCw } from "lucide-react";
+import { getDisplayHints, resolveIcon, resolveColor } from "@/lib/display-hints";
 import type { BaseEvent } from "./types";
 
 export type SessionBlock = {
@@ -67,9 +68,10 @@ export function groupEventsIntoBlocks(events: BaseEvent[]): EventBlock[] {
 }
 
 /**
- * Get the icon component and color for an event type
+ * Get the icon component and color for an event type.
+ * For tool events, checks metadata.display hints for custom icon/color.
  */
-export function getEventIconInfo(eventType: string) {
+export function getEventIconInfo(eventType: string, metadata?: Record<string, unknown> | null) {
   const isUserPrompt = eventType === "user_prompt";
   const isToolUse = eventType === "tool_use";
   const isCompaction = eventType === "compaction";
@@ -84,8 +86,9 @@ export function getEventIconInfo(eventType: string) {
     Icon = MessageSquare;
     iconColor = "text-blue-500";
   } else if (isToolUse) {
-    Icon = Wrench;
-    iconColor = "text-orange-500";
+    const hints = getDisplayHints(metadata);
+    Icon = resolveIcon(hints.icon, Wrench);
+    iconColor = resolveColor(hints.color, "orange").iconColor;
   } else if (isCompaction) {
     Icon = Zap;
     iconColor = "text-amber-500";
@@ -104,10 +107,17 @@ export function getEventIconInfo(eventType: string) {
 }
 
 /**
- * Extract the most useful info from tool metadata for display
+ * Extract the most useful info from tool metadata for display.
+ * Checks metadata.display.detail first for custom tools.
  */
 export function getToolDisplayInfo(toolName: string | null | undefined, metadata: Record<string, unknown> | null | undefined): string | null {
-  if (!toolName || !metadata) return null;
+  if (!metadata) return null;
+
+  // Check display hints first (custom tools can set their own detail text)
+  const displayDetail = getDisplayHints(metadata).detail;
+  if (displayDetail) return displayDetail;
+
+  if (!toolName) return null;
 
   const input = metadata.input as Record<string, unknown> | undefined;
   if (!input) return null;
@@ -224,9 +234,10 @@ export function getPermissionRequestInfo(eventType: string, toolName: string | n
 }
 
 /**
- * Get timeline-style circle and badge colors for an event
+ * Get timeline-style circle and badge colors for an event.
+ * For tool events, checks metadata.display hints for custom icon/color/label.
  */
-export function getTimelineEventStyle(eventType: string, toolName: string | null | undefined) {
+export function getTimelineEventStyle(eventType: string, toolName: string | null | undefined, metadata?: Record<string, unknown> | null) {
   const isAskUser = (eventType === "tool_use" || eventType === "tool_use_start") && toolName?.toLowerCase() === "askuserquestion";
 
   if (eventType === "session_end") {
@@ -293,12 +304,14 @@ export function getTimelineEventStyle(eventType: string, toolName: string | null
     };
   }
   if (eventType === "tool_use" || eventType === "tool_use_start") {
+    const hints = getDisplayHints(metadata);
+    const colors = resolveColor(hints.color, "purple");
     return {
-      circleClass: "border-purple-500 bg-purple-100 dark:bg-purple-900/30",
-      badgeClass: "border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300",
-      badgeLabel: toolName || "Tool",
-      Icon: Wrench,
-      iconColor: "text-purple-500",
+      circleClass: colors.circleClass,
+      badgeClass: colors.badgeClass,
+      badgeLabel: hints.label || toolName || "Tool",
+      Icon: resolveIcon(hints.icon, Wrench),
+      iconColor: colors.iconColor,
     };
   }
   return {

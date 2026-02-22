@@ -11,6 +11,7 @@ import React, { useEffect, useMemo, useCallback, useRef } from 'react'
 import { PixelProgress } from './PixelProgress'
 import type { ProgressEvent } from '../types'
 import { useSignalRContext } from '@/components/signalr-provider'
+import { getDisplayHints, VALID_CATEGORIES } from '@/lib/display-hints'
 
 // Map session event types to pixel-progress categories
 const EVENT_TYPE_TO_CATEGORY: Record<string, string> = {
@@ -74,26 +75,34 @@ export interface TimelinePixelProgressProps {
 }
 
 function timelineEventToProgressEvent(event: TimelineEvent): ProgressEvent {
-  // Determine category: tool name takes precedence over event type
+  const hints = getDisplayHints(event.metadata)
+
+  // Determine category: display hint > tool name > event type
   let category = 'process'
 
-  if (event.toolName && TOOL_NAME_TO_CATEGORY[event.toolName]) {
+  if (hints.category && VALID_CATEGORIES.has(hints.category)) {
+    category = hints.category
+  } else if (event.toolName && TOOL_NAME_TO_CATEGORY[event.toolName]) {
     category = TOOL_NAME_TO_CATEGORY[event.toolName]
   } else if (EVENT_TYPE_TO_CATEGORY[event.eventType]) {
     category = EVENT_TYPE_TO_CATEGORY[event.eventType]
   }
 
-  // Determine weight based on event importance
+  // Determine weight: display hint > hardcoded defaults
   let weight = 1
-  if (event.eventType === 'user_prompt') weight = 2
-  if (event.toolName === 'Write' || event.toolName === 'Edit') weight = 2
-  if (event.eventType === 'session_start') weight = 1.5
-  if (event.eventType === 'session_end') weight = 0
+  if (hints.weight !== null) {
+    weight = hints.weight
+  } else {
+    if (event.eventType === 'user_prompt') weight = 2
+    if (event.toolName === 'Write' || event.toolName === 'Edit') weight = 2
+    if (event.eventType === 'session_start') weight = 1.5
+    if (event.eventType === 'session_end') weight = 0
+  }
 
   return {
     id: event.id,
     category,
-    label: event.summary || event.toolName || event.eventType,
+    label: hints.label || event.summary || event.toolName || event.eventType,
     weight,
     timestamp: new Date(event.createdAt),
     metadata: {

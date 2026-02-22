@@ -6,11 +6,11 @@ import { getEventIconInfo, getTimelineEventStyle, getToolDisplayInfo, getAskUser
 import type { EventItemProps } from "./types";
 
 export function EventItem({ event, isGlowing, showFullDetails = true, compact = false }: EventItemProps) {
-  const { Icon, iconColor, isUserPrompt, isToolUse } = getEventIconInfo(event.eventType);
+  const { Icon, iconColor, isUserPrompt, isToolUse } = getEventIconInfo(event.eventType, event.metadata);
 
   if (compact) {
     // Timeline-style compact view for nested events
-    const style = getTimelineEventStyle(event.eventType, event.toolName);
+    const style = getTimelineEventStyle(event.eventType, event.toolName, event.metadata);
     const TimelineIcon = style.Icon;
 
     return (
